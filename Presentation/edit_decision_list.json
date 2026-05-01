@@ -1,30 +1,62 @@
 {
-  "total_duration": 4.6,
-  "photo_count": 3,
+  "total_duration": 14.8,
+  "photo_count": 7,
   "edit_decisions": [
     {
       "file_path": "photos/3.jpg",
       "start_time": 0.0,
       "duration": 3.0,
       "category": "Portrait",
-      "effect": "zoom_out",
-      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Portrait - In the image, there is a man who appears to be happy, as indicated by his smile. He is wearing a dar..."
+      "effect": "zoom_in",
+      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Portrait - In the image, there is a man who appears to be smiling broadly, looking directly at the camera. He h..."
     },
     {
       "file_path": "photos/1.jpg",
       "start_time": 3.0,
-      "duration": 0.8,
-      "category": "Action",
-      "effect": "zoom_out",
-      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Action - This image is a composite of two separate photographs. On the left side, there's an individual weari..."
+      "duration": 2.0,
+      "category": "Friends/Group",
+      "effect": "pan_right",
+      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Friends/Group - The image shows two separate photographs of individuals. On the left, there is a photograph of a wom..."
     },
     {
       "file_path": "photos/2.jpg",
-      "start_time": 3.8,
+      "start_time": 5.0,
+      "duration": 2.0,
+      "category": "Friends/Group",
+      "effect": "pan_right",
+      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Friends/Group - The image is a composite of three separate photographs featuring two individuals, presumably taken f..."
+    },
+    {
+      "file_path": "photos/5.jpg",
+      "start_time": 7.0,
+      "duration": 2.0,
+      "category": "Friends/Group",
+      "effect": "pan_left",
+      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Friends/Group - The image is a photograph featuring two men posing together on what appears to be a red carpet event..."
+    },
+    {
+      "file_path": "photos/7.jpg",
+      "start_time": 9.0,
+      "duration": 2.0,
+      "category": "Friends/Group",
+      "effect": "pan_left",
+      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Friends/Group - In the image, there is a group of four individuals standing on a stage or similar setting, posing fo..."
+    },
+    {
+      "file_path": "photos/8.jpg",
+      "start_time": 11.0,
       "duration": 0.8,
       "category": "Action",
-      "effect": "pan_left",
-      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Action - In the photo, there are three individuals who appear to be adults and are captured in a moment of mo..."
+      "effect": "zoom_in",
+      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Action - The image appears to be a photo of an individual standing next to a man who is seated inside a vehic..."
+    },
+    {
+      "file_path": "photos/6.jpg",
+      "start_time": 11.8,
+      "duration": 3.0,
+      "category": "Portrait",
+      "effect": "zoom_out",
+      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Portrait - In the image, there is a man standing on a stage at what appears to be an event or film premiere. He..."
     }
   ]
 }

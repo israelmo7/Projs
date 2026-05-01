@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-05-01T04:30:25.758809",
-  "total_photos": 3,
+  "generated_at": "2026-05-01T16:07:00.255079",
+  "total_photos": 8,
   "photos": [
     {
       "filename": "1.jpg",
@@ -8,8 +8,8 @@
       "datetime": null,
       "star_present": true,
       "face_count": 2,
-      "category": "General",
-      "raw_description": "This image is a composite of two separate photographs. On the left side, there's an individual wearing a dark top with what appears to be glittering or sequined elements on it, possibly on a red carpet given the backdrop that suggests an event setting, and they are looking directly at the camera with a slight smile. The person is wearing makeup and has long hair, suggesting a feminine identity. There's no immediate text visible in this portion of the image.\n\nOn the right side, there are two individuals standing together. They appear to be a couple: one man and one woman, both smiling at the camera, seemingly at an event given the indoor setting with lighting fixtures and decorative elements. The man is wearing a dark suit with a tie and a light-colored shirt underneath, while the woman is in a sleeveless top with a deep neckline, wearing makeup and jewelry.\n\nBoth images are superimposed onto each other, creating a collage effect. There's no direct text or context provided that would allow for more detailed descriptions of actions or expressions beyond what's described above."
+      "category": "Portrait",
+      "raw_description": "The image shows two separate photographs of individuals. On the left, there is a photograph of a woman with long hair who appears to be at an outdoor event. She has a neutral expression and is wearing what looks like a formal gown. Her gaze is directed to her left, not at the camera. This photo is labeled"
     },
     {
       "filename": "2.jpg",
@@ -17,8 +17,8 @@
       "datetime": null,
       "star_present": true,
       "face_count": 2,
-      "category": "General",
-      "raw_description": "In the photo, there are three individuals who appear to be adults and are captured in a moment of motion, as they are walking on what seems to be a city street. The person on the left is wearing dark sunglasses, has light hair, and is smiling broadly; they seem to be in a mid-stride pose. The central figure is partially visible, with only their torso and part of their face shown; they appear to be in motion as well. The individual on the right is also wearing sunglasses and seems to be in a similar walking pose. They are all dressed in casual attire appropriate for a daytime urban setting. In the background, the environment suggests an outdoor cityscape with buildings, suggesting it might be in a downtown area or city center during the daytime. There's no clear indication of any specific event or action taking place. The overall style of the image is candid and seems to capture a moment from their daily lives."
+      "category": "Portrait",
+      "raw_description": "The image is a composite of three separate photographs featuring two individuals, presumably taken from different publicity events given their attire and setting.\n\n1. On the left: This is a portrait-style photograph of a man standing against a dark background. He has short hair, wears sunglasses, and is dressed in a suit with a patterned shirt and tie. The man is smiling slightly and appears to be looking towards something or someone off-camera. There are no additional people or objects that provide context for the environment."
     },
     {
       "filename": "3.jpg",
@@ -27,7 +27,52 @@
       "star_present": true,
       "face_count": 1,
       "category": "General",
-      "raw_description": "In the image, there is a man who appears to be happy, as indicated by his smile. He is wearing a dark shirt with an open collar. The background suggests an indoor setting, possibly at an event or function, given the presence of stage lighting and the style of the carpet on the floor. There are no other people visible in the photo. The man seems to be the focus of this image."
+      "raw_description": "In the image, there is a man who appears to be smiling broadly, looking directly at the camera. He has short hair and is wearing a green top. Behind him, there is an indoor setting with a sign that seems to be part of an event or conference, but the details on the sign are not clear. The man's posture and facial expression suggest he is engaged in a positive conversation or presenting at this gathering."
+    },
+    {
+      "filename": "4.jpg",
+      "path": "photos/4.jpg",
+      "datetime": null,
+      "star_present": false,
+      "face_count": 1,
+      "category": "General",
+      "raw_description": "In the photo, there is a man sitting down. He appears to be middle-aged or older, with short hair and facial stubble. The man is smiling slightly, showing his teeth, and looking directly at the camera. He has a casual attire on, consisting of a graphic t-shirt with short sleeves and no visible accessories.\n\nThe environment suggests an indoor setting, likely a studio or television set due to the presence of lighting equipment in the background, which is typical for media interviews or press conferences. The backdrop is neutral and does not provide any specific details about the location.\n\nThere are two identical images placed side by side, each showing the same man in the same pose."
+    },
+    {
+      "filename": "5.jpg",
+      "path": "photos/5.jpg",
+      "datetime": null,
+      "star_present": true,
+      "face_count": 2,
+      "category": "Portrait",
+      "raw_description": "The image is a photograph featuring two men posing together on what appears to be a red carpet event. The person on the left is dressed in a light green suit with no visible shirt underneath, revealing a muscular build, and is wearing sunglasses. The person on the right is wearing a dark green suit with a tie visible and has long hair. Both individuals are smiling and seem to be posing for the camera. They are standing close together with their arms near each other. In the background, there is a sign that reads \"TROY VOLKSWAGEN\" in capital letters, indicating a sponsor of the event. The style of the image suggests it was taken at a public event or celebration, given the setting and attire of the individuals."
+    },
+    {
+      "filename": "6.jpg",
+      "path": "photos/6.jpg",
+      "datetime": null,
+      "star_present": true,
+      "face_count": 1,
+      "category": "General",
+      "raw_description": "In the image, there is a man standing on a stage at what appears to be an event or film premiere. He is dressed in a dark shirt and trousers with black shoes. His posture is relaxed with his hands tucked into his pockets. The setting includes promotional materials for a movie, indicating that this is likely the red carpet portion of a film screening or premiere. Behind him, there's a sign with text and symbols in Chinese characters, which might be related to the film or event sponsors or details. There are no other individuals visible in the background, so the focus is solely on this man. The atmosphere seems formal and celebratory, common for such events."
+    },
+    {
+      "filename": "7.jpg",
+      "path": "photos/7.jpg",
+      "datetime": null,
+      "star_present": true,
+      "face_count": 4,
+      "category": "Portrait",
+      "raw_description": "In the image, there is a group of four individuals standing on a stage or similar setting, posing for a photograph. On the left side, there's a man in a black jacket and light-colored pants holding hands with a woman wearing a white coat and sunglasses. To their right is another man dressed in a suit, smiling and looking towards the camera. Behind them stands a man on the far right, also wearing a suit, who appears to be applauding or acknowledging an audience out of frame. The setting suggests an event or performance space with a black background and some stage lighting. There's no visible text in the image to provide additional context."
+    },
+    {
+      "filename": "8.jpg",
+      "path": "photos/8.jpg",
+      "datetime": null,
+      "star_present": true,
+      "face_count": 2,
+      "category": "General",
+      "raw_description": "The image appears to be a photo of an individual standing next to a man who is seated inside a vehicle, which seems to be an open-top car given the absence of a roof. Both individuals are dressed in casual attire. There's no clear indication of their actions or expressions due to the angle and distance from the camera. The environment around them is not distinctly identifiable.\n\nAs for the image below it, there's no information provided about people or an environment, as it seems to be unrelated to the description request for the photo above."
     }
   ]
 }
