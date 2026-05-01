@@ -1,0 +1,30 @@
+{
+  "total_duration": 4.6,
+  "photo_count": 3,
+  "edit_decisions": [
+    {
+      "file_path": "photos/3.jpg",
+      "start_time": 0.0,
+      "duration": 3.0,
+      "category": "Portrait",
+      "effect": "zoom_out",
+      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Portrait - In the image, there is a man who appears to be happy, as indicated by his smile. He is wearing a dar..."
+    },
+    {
+      "file_path": "photos/1.jpg",
+      "start_time": 3.0,
+      "duration": 0.8,
+      "category": "Action",
+      "effect": "zoom_out",
+      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Action - This image is a composite of two separate photographs. On the left side, there's an individual weari..."
+    },
+    {
+      "file_path": "photos/2.jpg",
+      "start_time": 3.8,
+      "duration": 0.8,
+      "category": "Action",
+      "effect": "pan_left",
+      "edit_notes": "STAR FEATURE: Confirmed star presence | Category: Action - In the photo, there are three individuals who appear to be adults and are captured in a moment of mo..."
+    }
+  ]
+}
