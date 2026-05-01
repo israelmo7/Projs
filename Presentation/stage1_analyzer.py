@@ -3,15 +3,10 @@
 Stage 1: Image Analyzer
 ======================
 Analyzes photos in the photos/ directory and outputs video_plan.json
-
-Features:
-- Extracts EXIF datetime using Pillow
-- Uses face_recognition to detect the reference "star" in each photo
-- Uses Ollama LLaVA to classify images into categories
-- Saves aggregated data to video_plan.json
 """
 
 import os
+import io
 import sys
 import json
 import base64
@@ -19,6 +14,7 @@ import PIL.Image
 from datetime import datetime
 import face_recognition
 import requests
+from typing import Optional, Tuple, List, Dict, Any
 
 # Configuration
 REFERENCE_STAR_PATH = "assets/star.jpg"
@@ -32,12 +28,23 @@ VALID_CATEGORIES = ["Portrait", "Friends/Group", "Funny", "Childhood", "Action/E
 
 
 def image_to_base64(image_path: str) -> str:
-    """Convert image to base64 string for API upload."""
-    with open(image_path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
+    """Resize image and convert to compressed base64 JPEG."""
+    with PIL.Image.open(image_path) as img:
+        # המרה ל-RGB (למנוע בעיות עם PNG שקופים)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # הקטנה ל-640 פיקסלים (מספיק בהחלט לסיווג)
+        max_size = 640
+        img.thumbnail((max_size, max_size), PIL.Image.LANCZOS)
+            
+        # שמירה כ-JPEG דחוס לתוך הזיכרון
+        buffered = io.BytesIO()
+        img.save(buffered, format="JPEG", quality=70) # 70% איכות זה די והותר
+        return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
-def extract_exif_datetime(image_path: str) -> str | None:
+def extract_exif_datetime(image_path: str) -> Optional[str]:
     """Extract datetime from EXIF metadata using Pillow."""
     try:
         with PIL.Image.open(image_path) as img:
@@ -46,33 +53,21 @@ def extract_exif_datetime(image_path: str) -> str | None:
                 # Try different EXIF tags for datetime
                 dt_raw = exif_data.get(36867)  # DateTimeOriginal
                 if dt_raw:
-                    return dt_raw
+                    return str(dt_raw)
                 dt_raw = exif_data.get(42419)  # DateTime
                 if dt_raw:
-                    return dt_raw
+                    return str(dt_raw)
     except Exception:
         pass
     return None
 
 
-def check_star_in_photo(image_path: str, star_path: str) -> tuple[bool, int]:
+def check_star_in_photo(image_path: str, star_encodings: List[Any]) -> Tuple[bool, int]:
     """
-    Check if reference star appears in the photo.
+    Check if reference star appears in the photo using pre-loaded encodings.
     Returns: (found_star, face_count_in_photo)
     """
     try:
-        # Load reference image
-        if not os.path.exists(star_path):
-            print(f"ERROR: Reference star not found at '{star_path}'. Please place your reference photo there.")
-            return False, 0
-        
-        star_image = face_recognition.load_image_file(star_path)
-        star_encodings = face_recognition.face_encodings(star_image)
-        
-        if not star_encodings:
-            print(f"ERROR: No face found in reference star at '{star_path}'. Hard aborting.")
-            sys.exit(1)
-        
         # Load photo and find faces
         photo_image = face_recognition.load_image_file(image_path)
         photo_encodings = face_recognition.face_encodings(photo_image)
@@ -83,6 +78,7 @@ def check_star_in_photo(image_path: str, star_path: str) -> tuple[bool, int]:
         # Compare encodings
         for star_encoding in star_encodings:
             for photo_encoding in photo_encodings:
+                # [0] is required because compare_faces returns a list of booleans
                 if face_recognition.compare_faces([star_encoding], photo_encoding, tolerance=0.6)[0]:
                     return True, len(photo_encodings)
         
@@ -93,108 +89,68 @@ def check_star_in_photo(image_path: str, star_path: str) -> tuple[bool, int]:
         return False, 0
 
 
-def classify_with_ollama(image_path: str) -> tuple[str | None, str | None]:
-    """
-    Send image to Ollama LLaVA for classification.
-    Returns: (category, raw_description)
-    """
+def classify_with_ollama(image_path: str) -> Tuple[Optional[str], Optional[str]]:
     try:
         image_base64 = image_to_base64(image_path)
         
-        # System prompt with strict formatting instructions
-        system_prompt = """You are an image classifier. Analyze the provided image and return ONLY the category name
-or a strict JSON with category and description.
+        # פרומפט חדש שמתמקד בתיאור אנושי וסביבתי
+        system_prompt = """You are an expert image describer. Your task is to provide a natural, 
+concise description of the photo in one sentence.
 
-Valid categories:
-- Portrait
-- Friends/Group  
-- Funny
-- Childhood
-- Action/Event
+Focus Priority:
+1. The people: Number of people, their actions (smiling, looking away, hugging), and their expressions.
+2. The environment: Where they are and what is around them (on a bench, in a room, outdoors).
 
-Return format:
-{
-  "category": "<one valid category>",
-  "raw_description": "<brief description>"
-}
+Example: "A smiling man and a woman beside him sitting on a bench in a sunny park."
 
-Be strict. Only return valid categories.
-"""
-        
-        user_prompt = "Classify this image."
-        
+After the description, include one of these labels in brackets at the end: [Portrait], [Friends/Group], [Funny], [Childhood], [Action/Event]."""
+
         payload = {
             "model": OLLAMA_MODEL,
-            "prompt": user_prompt,
+            "prompt": "Describe the people and the environment in this photo.",
             "system": system_prompt,
             "images": [image_base64],
             "stream": False
         }
         
         response = requests.post(OLLAMA_API_URL, json=payload, timeout=60)
-        
-        if response.status_code != 200:
-            print(f"ERROR: Ollama API returned {response.status_code}: {response.text}")
-            return None, None
-        
         result = response.json()
-        raw_output = result.get("response", "")
+        raw_output = result.get("response", "").strip()
         
-        # Try to parse as JSON first
-        try:
-            parsed = json.loads(raw_output)
-            category = parsed.get("category")
-            raw_description = parsed.get("raw_description", "")
-            
-            if not category:
-                print(f"WARNING: Ollama returned invalid JSON. Raw output: {raw_output}")
-                return None, raw_output
-            
-            # Validate category
-            if category not in VALID_CATEGORIES:
-                print(f"WARNING: Ollama returned unknown category '{category}'. Using fallback.")
-                category = None
-            
-            return category, raw_output
-            
-        except json.JSONDecodeError:
-            # Fallback: try to extract category from plain text
-            lines = raw_output.strip().split("\n")
-            for line in lines:
-                line = line.strip()
-                if line.startswith("category:") or line.startswith("Category:"):
-                    category = line.split(":", 1)[1].strip()
-                    if category and category in VALID_CATEGORIES:
-                        return category, raw_output
-                elif line in VALID_CATEGORIES:
-                    category = line
-                    return category, raw_output
-            
-            # Return raw description if no category found
-            return None, raw_output
+        print(f"  [DEBUG] Ollama description: '{raw_output}'")
+
+        # חילוץ הקטגוריה מתוך הסוגריים (למשל [Portrait])
+        category = "General"
+        for valid_cat in VALID_CATEGORIES:
+            if f"[{valid_cat}]" in raw_output:
+                category = valid_cat
+                break
+        
+        # ניקוי התיאור מהתגית בסוף כדי שיישאר רק הטקסט
+        clean_description = raw_output.split('[')[0].strip()
+        
+        return category, clean_description
             
     except Exception as e:
-        print(f"ERROR: Failed to call Ollama for '{image_path}': {e}")
+        print(f"  [DEBUG] Exception: {e}")
         return None, None
 
-
-def process_photo(image_path: str, photo_index: int, total_photos: int) -> dict:
+def process_photo(image_path: str, photo_index: int, total_photos: int, star_encodings: List[Any]) -> Dict[str, Any]:
     """Process a single photo and return its metadata."""
     filename = os.path.basename(image_path)
     print(f"[{photo_index + 1}/{total_photos}] Processing: {filename}")
     
-    # Extract EXIF datetime
     dt = extract_exif_datetime(image_path)
     
-    # Check for star
-    star_found, face_count = check_star_in_photo(image_path, REFERENCE_STAR_PATH)
+    # Check for star using the pre-loaded encodings
+    star_found, face_count = check_star_in_photo(image_path, star_encodings)
     
     # Classify with Ollama
     category, raw_description = classify_with_ollama(image_path)
     
     # Fallback category if Ollama failed
     if not category:
-        print(f"  -> Ollama unavailable. Marking as 'NeedsReview'.")
+        print(f"  -> Ollama unavailable or unreadable format. Marking as 'NeedsReview'.")
         category = "NeedsReview"
     
     return {
@@ -223,6 +179,19 @@ def main():
     if not os.path.exists(REFERENCE_STAR_PATH):
         print(f"ERROR: Reference star not found: '{REFERENCE_STAR_PATH}'")
         sys.exit(1)
+        
+    # Pre-load the star encoding ONCE (Performance fix)
+    try:
+        print(f"Loading reference star from {REFERENCE_STAR_PATH}...")
+        star_image = face_recognition.load_image_file(REFERENCE_STAR_PATH)
+        star_encodings = face_recognition.face_encodings(star_image)
+        if not star_encodings:
+            print(f"ERROR: No face found in reference star at '{REFERENCE_STAR_PATH}'. Hard aborting.")
+            sys.exit(1)
+        print("Reference star loaded successfully.\n")
+    except Exception as e:
+        print(f"ERROR: Could not process reference star: {e}")
+        sys.exit(1)
     
     # Get all image files
     supported_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
@@ -243,7 +212,7 @@ def main():
     photo_data = []
     for idx, filename in enumerate(image_files):
         image_path = os.path.join(PHOTOS_DIR, filename)
-        photo = process_photo(image_path, idx, len(image_files))
+        photo = process_photo(image_path, idx, len(image_files), star_encodings)
         photo_data.append(photo)
     
     # Build output structure

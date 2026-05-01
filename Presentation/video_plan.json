@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-05-01T04:30:25.758809",
+  "total_photos": 3,
+  "photos": [
+    {
+      "filename": "1.jpg",
+      "path": "photos/1.jpg",
+      "datetime": null,
+      "star_present": true,
+      "face_count": 2,
+      "category": "General",
+      "raw_description": "This image is a composite of two separate photographs. On the left side, there's an individual wearing a dark top with what appears to be glittering or sequined elements on it, possibly on a red carpet given the backdrop that suggests an event setting, and they are looking directly at the camera with a slight smile. The person is wearing makeup and has long hair, suggesting a feminine identity. There's no immediate text visible in this portion of the image.\n\nOn the right side, there are two individuals standing together. They appear to be a couple: one man and one woman, both smiling at the camera, seemingly at an event given the indoor setting with lighting fixtures and decorative elements. The man is wearing a dark suit with a tie and a light-colored shirt underneath, while the woman is in a sleeveless top with a deep neckline, wearing makeup and jewelry.\n\nBoth images are superimposed onto each other, creating a collage effect. There's no direct text or context provided that would allow for more detailed descriptions of actions or expressions beyond what's described above."
+    },
+    {
+      "filename": "2.jpg",
+      "path": "photos/2.jpg",
+      "datetime": null,
+      "star_present": true,
+      "face_count": 2,
+      "category": "General",
+      "raw_description": "In the photo, there are three individuals who appear to be adults and are captured in a moment of motion, as they are walking on what seems to be a city street. The person on the left is wearing dark sunglasses, has light hair, and is smiling broadly; they seem to be in a mid-stride pose. The central figure is partially visible, with only their torso and part of their face shown; they appear to be in motion as well. The individual on the right is also wearing sunglasses and seems to be in a similar walking pose. They are all dressed in casual attire appropriate for a daytime urban setting. In the background, the environment suggests an outdoor cityscape with buildings, suggesting it might be in a downtown area or city center during the daytime. There's no clear indication of any specific event or action taking place. The overall style of the image is candid and seems to capture a moment from their daily lives."
+    },
+    {
+      "filename": "3.jpg",
+      "path": "photos/3.jpg",
+      "datetime": null,
+      "star_present": true,
+      "face_count": 1,
+      "category": "General",
+      "raw_description": "In the image, there is a man who appears to be happy, as indicated by his smile. He is wearing a dark shirt with an open collar. The background suggests an indoor setting, possibly at an event or function, given the presence of stage lighting and the style of the carpet on the floor. There are no other people visible in the photo. The man seems to be the focus of this image."
+    }
+  ]
+}
