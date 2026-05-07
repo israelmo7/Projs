@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Stage 1: Image Analyzer
-======================
-Analyzes photos in the photos/ directory and outputs video_plan.json
+Stage 1: Sensory Media Analyzer Pro 3.0 (Multithreaded + BPM Detection)
+=======================================================================
+Highly optimized analyzer leveraging ThreadPoolExecutor for M4 architecture.
+Extracts visual narrative via Llava and complex acoustic signatures (Peaks, Onset, BPM) via Librosa.
 """
 
 import os
@@ -10,11 +11,18 @@ import io
 import sys
 import json
 import base64
-import PIL.Image
+import time
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional, Tuple, List, Dict, Any
+
+import PIL.Image
+import PIL.ExifTags
 import face_recognition
 import requests
-from typing import Optional, Tuple, List, Dict, Any
+import numpy as np
+import cv2
+import librosa
 
 # Configuration
 REFERENCE_STAR_PATH = "assets/star.jpg"
@@ -23,225 +31,233 @@ OUTPUT_JSON = "video_plan.json"
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "llava"
 
-# Classification categories
 VALID_CATEGORIES = ["Portrait", "Friends/Group", "Funny", "Childhood", "Action/Event"]
+SUPPORTED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp"}
+SUPPORTED_VIDEO_EXT = {".mp4", ".mov", ".avi"}
 
+MAX_WORKERS = 4 # ניצול יעיל של הליבות מול Ollama
 
-def image_to_base64(image_path: str) -> str:
-    """Resize image and convert to compressed base64 JPEG."""
-    with PIL.Image.open(image_path) as img:
-        # המרה ל-RGB (למנוע בעיות עם PNG שקופים)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        
-        # הקטנה ל-640 פיקסלים (מספיק בהחלט לסיווג)
-        max_size = 640
-        img.thumbnail((max_size, max_size), PIL.Image.LANCZOS)
-            
-        # שמירה כ-JPEG דחוס לתוך הזיכרון
-        buffered = io.BytesIO()
-        img.save(buffered, format="JPEG", quality=70) # 70% איכות זה די והותר
-        return base64.b64encode(buffered.getvalue()).decode("utf-8")
+# --- Audio Analysis Engine ---
 
-
-def extract_exif_datetime(image_path: str) -> Optional[str]:
-    """Extract datetime from EXIF metadata using Pillow."""
+def analyze_audio_for_mashup(video_path: str) -> Dict[str, Any]:
+    """מנתח את ה-DNA האקוסטי כולל מציאת BPM (טמפו) לתזמון אומנותי"""
     try:
-        with PIL.Image.open(image_path) as img:
-            exif_data = img.getexif()
-            if exif_data:
-                # Try different EXIF tags for datetime
-                dt_raw = exif_data.get(36867)  # DateTimeOriginal
-                if dt_raw:
-                    return str(dt_raw)
-                dt_raw = exif_data.get(42419)  # DateTime
-                if dt_raw:
-                    return str(dt_raw)
+        y, sr = librosa.load(video_path, sr=None)
+        if len(y) == 0:
+            return {"energy_score": 0, "peaks": [], "onset_sec": 0, "bpm": 0}
+
+        # עוצמה ונקודות כניסה
+        rms = librosa.feature.rms(y=y)[0]
+        times = librosa.frames_to_time(range(len(rms)), sr=sr)
+        
+        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+        onsets = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr, units='time')
+        first_onset = float(onsets[0]) if len(onsets) > 0 else 0.0
+
+        # שיאי אנרגיה
+        peak_indices = np.argsort(rms)[-3:]
+        peaks = sorted([round(float(times[i]), 2) for i in peak_indices])
+
+        # זיהוי קצב (BPM) לטובת סנכרון עם מוזיקת הרקע!
+        tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+        bpm = float(tempo[0]) if isinstance(tempo, (list, np.ndarray)) else float(tempo)
+
+        energy_score = float(np.mean(rms)) * 10 
+
+        return {
+            "energy_score": round(min(energy_score, 1.0), 2),
+            "peaks": peaks, 
+            "onset_sec": round(first_onset, 2),
+            "bpm": round(bpm, 1),
+            "is_dynamic": bool(np.std(rms) > 0.05)
+        }
+    except Exception as e:
+        print(f"    [!] Audio analysis failed for {os.path.basename(video_path)}: {e}")
+        return {"energy_score": 0, "peaks": [], "onset_sec": 0, "bpm": 0}
+
+# --- Visual & System Functions ---
+
+def get_media_datetime(file_path: str, pil_img: Optional[PIL.Image.Image] = None) -> str:
+    """שואב תאריך יצירה מקורי מה-EXIF או נופל לתאריך קובץ"""
+    try:
+        if pil_img:
+            exif = pil_img.getexif()
+            if exif:
+                # 36867 is DateTimeOriginal, 306 is DateTime
+                dt_str = exif.get(36867) or exif.get(306)
+                if dt_str:
+                    # המרה מפורמט EXIF ל-ISO
+                    dt_obj = datetime.strptime(str(dt_str), "%Y:%m:%d %H:%M:%S")
+                    return dt_obj.isoformat()
     except Exception:
         pass
-    return None
-
-
-def check_star_in_photo(image_path: str, star_encodings: List[Any]) -> Tuple[bool, int]:
-    """
-    Check if reference star appears in the photo using pre-loaded encodings.
-    Returns: (found_star, face_count_in_photo)
-    """
+    
+    # Fallback למערכת הקבצים
     try:
-        # Load photo and find faces
-        photo_image = face_recognition.load_image_file(image_path)
-        photo_encodings = face_recognition.face_encodings(photo_image)
-        
-        if not photo_encodings:
-            return False, 0
-        
-        # Compare encodings
+        timestamp = os.path.getmtime(file_path)
+        return datetime.fromtimestamp(timestamp).isoformat()
+    except Exception:
+        return datetime.now().isoformat()
+
+def pil_image_to_base64(img: PIL.Image.Image) -> str:
+    if img.mode != 'RGB': img = img.convert('RGB')
+    img.thumbnail((512, 512), PIL.Image.LANCZOS)
+    buffered = io.BytesIO()
+    img.save(buffered, format="JPEG", quality=70)
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+def extract_strategic_frames(video_path: str) -> Tuple[List[PIL.Image.Image], float]:
+    """מחלץ 5 פריימים משמעותיים לאיזון בין מהירות ודיוק נרטיבי"""
+    frames = []
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened(): return frames, 0.0
+    
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    duration = total_frames / fps if fps > 0 else 0.0
+    
+    # דגימה ב: 0%, 25%, 50%, 75%, 90%
+    indices = [int(total_frames * p) for p in [0.0, 0.25, 0.5, 0.75, 0.9]]
+    
+    for idx in indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, min(idx, total_frames - 1))
+        ret, frame = cap.read()
+        if ret:
+            frames.append(PIL.Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+            
+    cap.release()
+    return frames, duration
+
+def check_star_in_pil_image(pil_img: PIL.Image.Image, star_encodings: List[Any]) -> Tuple[bool, int]:
+    try:
+        image_array = np.array(pil_img.convert('RGB'))
+        photo_encodings = face_recognition.face_encodings(image_array)
         for star_encoding in star_encodings:
             for photo_encoding in photo_encodings:
-                # [0] is required because compare_faces returns a list of booleans
                 if face_recognition.compare_faces([star_encoding], photo_encoding, tolerance=0.6)[0]:
                     return True, len(photo_encodings)
-        
         return False, len(photo_encodings)
-        
-    except Exception as e:
-        print(f"WARNING: Face recognition failed for '{image_path}': {e}")
+    except Exception: 
         return False, 0
 
-
-def classify_with_ollama(image_path: str) -> Tuple[Optional[str], Optional[str]]:
-    try:
-        image_base64 = image_to_base64(image_path)
-        
-        # פרומפט חדש שמתמקד בתיאור אנושי וסביבתי
-        system_prompt = """You are an expert image describer. Your task is to provide a natural, 
-concise description of the photo in one sentence.
-
-Focus Priority:
-1. The people: Number of people, their actions (smiling, looking away, hugging), and their expressions.
-2. The environment: Where they are and what is around them (on a bench, in a room, outdoors).
-
-Example: "A smiling man and a woman beside him sitting on a bench in a sunny park."
-
-After the description, include one of these labels in brackets at the end: [Portrait], [Friends/Group], [Funny], [Childhood], [Action/Event]."""
-
-        payload = {
-            "model": OLLAMA_MODEL,
-            "prompt": "Describe the people and the environment in this photo.",
-            "system": system_prompt,
-            "images": [image_base64],
-            "stream": False
-        }
-        
-        response = requests.post(OLLAMA_API_URL, json=payload, timeout=60)
-        result = response.json()
-        raw_output = result.get("response", "").strip()
-        
-        print(f"  [DEBUG] Ollama description: '{raw_output}'")
-
-        # חילוץ הקטגוריה מתוך הסוגריים (למשל [Portrait])
-        category = "General"
-        for valid_cat in VALID_CATEGORIES:
-            if f"[{valid_cat}]" in raw_output:
-                category = valid_cat
-                break
-        
-        # ניקוי התיאור מהתגית בסוף כדי שיישאר רק הטקסט
-        clean_description = raw_output.split('[')[0].strip()
-        
-        return category, clean_description
+def classify_with_ollama(base64_image: str, retries: int = 2) -> Tuple[str, str]:
+    """תקשורת חסינה מול Ollama עם מנגנון Retry"""
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": "What is happening? Describe action/vibe. End with: [Portrait], [Friends/Group], [Funny], [Childhood], or [Action/Event].",
+        "images": [base64_image],
+        "stream": False
+    }
+    
+    for attempt in range(retries):
+        try:
+            response = requests.post(OLLAMA_API_URL, json=payload, timeout=45)
+            if response.status_code == 200:
+                raw_output = response.json().get("response", "").strip()
+                category = "General"
+                for valid_cat in VALID_CATEGORIES:
+                    if f"[{valid_cat}]" in raw_output:
+                        category = valid_cat
+                        break
+                clean_desc = raw_output.split('[')[0].strip().replace('\n', ' ')
+                return category, clean_desc
+        except Exception as e:
+            time.sleep(2) # המתנה לפני ניסיון נוסף
             
-    except Exception as e:
-        print(f"  [DEBUG] Exception: {e}")
-        return None, None
+    return "NeedsReview", "Failed to analyze image."
 
-def process_photo(image_path: str, photo_index: int, total_photos: int, star_encodings: List[Any]) -> Dict[str, Any]:
-    """Process a single photo and return its metadata."""
-    filename = os.path.basename(image_path)
-    print(f"[{photo_index + 1}/{total_photos}] Processing: {filename}")
+def process_single_media(file_path: str, star_encodings: List[Any]) -> Dict[str, Any]:
+    """הפונקציה המרכזית לעיבוד קובץ בודד (מתוכננת לרוץ בת'רד נפרד)"""
+    filename = os.path.basename(file_path)
+    ext = os.path.splitext(filename)[1].lower()
+    print(f"[*] Analyzing: {filename}...")
     
-    dt = extract_exif_datetime(image_path)
-    
-    # Check for star using the pre-loaded encodings
-    star_found, face_count = check_star_in_photo(image_path, star_encodings)
-    
-    # Classify with Ollama
-    category, raw_description = classify_with_ollama(image_path)
-    
-    # Fallback category if Ollama failed
-    if not category:
-        print(f"  -> Ollama unavailable or unreadable format. Marking as 'NeedsReview'.")
-        category = "NeedsReview"
-    
-    return {
+    media_data = {
         "filename": filename,
-        "path": image_path,
-        "datetime": dt,
-        "star_present": star_found,
-        "face_count": face_count,
-        "category": category,
-        "raw_description": raw_description
+        "path": file_path,
+        "media_type": "image",
+        "duration": 0.0,
+        "datetime": None,
+        "category": "General",
+        "audio_profile": None
     }
 
+    if ext in SUPPORTED_VIDEO_EXT:
+        media_data["media_type"] = "video"
+        media_data["datetime"] = get_media_datetime(file_path)
+        
+        frames, duration = extract_strategic_frames(file_path)
+        media_data["duration"] = duration
+        
+        if frames:
+            mid_frame = frames[len(frames)//2]
+            media_data["star_present"], media_data["face_count"] = check_star_in_pil_image(mid_frame, star_encodings)
+            
+            descs = []
+            for i, f in enumerate(frames):
+                _, desc = classify_with_ollama(pil_image_to_base64(f))
+                if desc and desc != "Failed to analyze image.":
+                    descs.append(desc)
+            
+            # בניית תיאור וידאו רציף ומאוחד
+            media_data["raw_description"] = " | ".join(descs) if descs else "No clear description."
+            media_data["category"] = "Action/Event"
+            
+        media_data["audio_profile"] = analyze_audio_for_mashup(file_path)
+        
+    else:
+        try:
+            pil_img = PIL.Image.open(file_path)
+            media_data["datetime"] = get_media_datetime(file_path, pil_img)
+            media_data["star_present"], media_data["face_count"] = check_star_in_pil_image(pil_img, star_encodings)
+            cat, desc = classify_with_ollama(pil_image_to_base64(pil_img))
+            media_data["category"] = cat
+            media_data["raw_description"] = desc
+        except Exception as e:
+            print(f"  [-] Failed image {filename}: {e}")
+            media_data["category"] = "NeedsReview"
+            
+    return media_data
 
 def main():
-    """Main entry point."""
     print("=" * 60)
-    print("AI Video Director - Stage 1: Image Analyzer")
+    print("Stage 1: Sensory Media Analyzer Pro (Multithreaded)")
     print("=" * 60)
-    print()
     
-    # Validate directories
-    if not os.path.exists(PHOTOS_DIR):
-        print(f"ERROR: Photos directory not found: '{PHOTOS_DIR}'")
-        sys.exit(1)
+    if not os.path.exists(PHOTOS_DIR): sys.exit("ERROR: 'photos/' directory missing.")
+    if not os.path.exists(REFERENCE_STAR_PATH): sys.exit(f"ERROR: Reference star {REFERENCE_STAR_PATH} missing.")
     
-    if not os.path.exists(REFERENCE_STAR_PATH):
-        print(f"ERROR: Reference star not found: '{REFERENCE_STAR_PATH}'")
-        sys.exit(1)
-        
-    # Pre-load the star encoding ONCE (Performance fix)
     try:
-        print(f"Loading reference star from {REFERENCE_STAR_PATH}...")
-        star_image = face_recognition.load_image_file(REFERENCE_STAR_PATH)
-        star_encodings = face_recognition.face_encodings(star_image)
-        if not star_encodings:
-            print(f"ERROR: No face found in reference star at '{REFERENCE_STAR_PATH}'. Hard aborting.")
-            sys.exit(1)
-        print("Reference star loaded successfully.\n")
+        star_img = face_recognition.load_image_file(REFERENCE_STAR_PATH)
+        star_encodings = face_recognition.face_encodings(star_img)
+        if not star_encodings: sys.exit("ERROR: No face found in reference image.")
     except Exception as e:
-        print(f"ERROR: Could not process reference star: {e}")
-        sys.exit(1)
+        sys.exit(f"ERROR loading reference star: {e}")
     
-    # Get all image files
-    supported_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
-    image_files = [
-        f for f in os.listdir(PHOTOS_DIR)
-        if os.path.splitext(f)[1].lower() in supported_extensions
-    ]
+    all_extensions = SUPPORTED_IMAGE_EXT.union(SUPPORTED_VIDEO_EXT)
+    files = [os.path.join(PHOTOS_DIR, f) for f in os.listdir(PHOTOS_DIR) if os.path.splitext(f)[1].lower() in all_extensions]
     
-    if not image_files:
-        print(f"ERROR: No image files found in '{PHOTOS_DIR}'")
-        sys.exit(1)
+    print(f"Found {len(files)} media files. Firing up {MAX_WORKERS} parallel workers...\n")
     
-    image_files.sort()  # Process in alphabetical order
+    results = []
+    # הרצה מקבילית לפלט חזק ומהיר
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {executor.submit(process_single_media, f, star_encodings): f for f in files}
+        for count, future in enumerate(as_completed(futures), 1):
+            try:
+                data = future.result()
+                results.append(data)
+                print(f"  [+] Finished {count}/{len(files)}: {data['filename']}")
+            except Exception as e:
+                print(f"  [-] Critical failure on a worker thread: {e}")
+                
+    # סידור כרונולוגי לפני השמירה
+    results.sort(key=lambda x: x.get("datetime", ""))
     
-    print(f"Found {len(image_files)} images to process.\n")
-    
-    # Process all photos
-    photo_data = []
-    for idx, filename in enumerate(image_files):
-        image_path = os.path.join(PHOTOS_DIR, filename)
-        photo = process_photo(image_path, idx, len(image_files), star_encodings)
-        photo_data.append(photo)
-    
-    # Build output structure
-    output = {
-        "generated_at": datetime.now().isoformat(),
-        "total_photos": len(image_files),
-        "photos": photo_data
-    }
-    
-    # Save to JSON
     with open(OUTPUT_JSON, "w") as f:
-        json.dump(output, f, indent=2)
-    
-    print()
-    print("=" * 60)
-    print("Stage 1 Complete!")
-    print(f"Output saved to: {OUTPUT_JSON}")
-    print("=" * 60)
-    
-    # Summary statistics
-    categories = {}
-    for photo in photo_data:
-        cat = photo["category"]
-        categories[cat] = categories.get(cat, 0) + 1
-    
-    print("\nCategory Summary:")
-    for cat, count in sorted(categories.items()):
-        print(f"  {cat}: {count}")
-
+        json.dump({"photos": results}, f, indent=2)
+        
+    print(f"\nStage 1 Complete! Extremely rich metadata saved to {OUTPUT_JSON}.")
 
 if __name__ == "__main__":
     main()
