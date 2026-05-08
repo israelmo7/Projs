@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Stage 1: Sensory Media Analyzer Pro 3.0 (Multithreaded + BPM Detection)
-=======================================================================
+Stage 1: Sensory Media Analyzer Pro 3.1 (Incremental + Force Flag)
+==================================================================
 Highly optimized analyzer leveraging ThreadPoolExecutor for M4 architecture.
 Extracts visual narrative via Llava and complex acoustic signatures (Peaks, Onset, BPM) via Librosa.
+Features incremental saving (skips existing) and a --force flag.
 """
 
 import os
@@ -12,9 +13,13 @@ import sys
 import json
 import base64
 import time
+import argparse
+import gc
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Tuple, List, Dict, Any
+import subprocess
+import uuid
 
 import PIL.Image
 import PIL.ExifTags
@@ -35,18 +40,31 @@ VALID_CATEGORIES = ["Portrait", "Friends/Group", "Funny", "Childhood", "Action/E
 SUPPORTED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 SUPPORTED_VIDEO_EXT = {".mp4", ".mov", ".avi"}
 
-MAX_WORKERS = 4 # ניצול יעיל של הליבות מול Ollama
+MAX_WORKERS = 2 # ניצול יעיל של הליבות מול Ollama
 
 # --- Audio Analysis Engine ---
-
 def analyze_audio_for_mashup(video_path: str) -> Dict[str, Any]:
-    """מנתח את ה-DNA האקוסטי כולל מציאת BPM (טמפו) לתזמון אומנותי"""
+    """מנתח את ה-DNA האקוסטי בגרסה חסינה המונעת התנגשויות ת'רדים ו-Segmentation Faults"""
+    unique_id = uuid.uuid4().hex[:8]
+    temp_wav = f"temp_audio_{unique_id}.wav"
+    
     try:
-        y, sr = librosa.load(video_path, sr=None)
-        if len(y) == 0:
-            return {"energy_score": 0, "peaks": [], "onset_sec": 0, "bpm": 0}
+        # 1. חילוץ האודיו החוצה בצורה בטוחה
+        cmd = [
+            "ffmpeg", "-y", "-i", video_path, 
+            "-vn", "-acodec", "pcm_s16le", "-ar", "22050", "-ac", "1", 
+            temp_wav
+        ]
+        subprocess.run(cmd, capture_output=True, check=False)
+        
+        if not os.path.exists(temp_wav):
+            return {"energy_score": 0, "peaks": [], "onset_sec": 0, "bpm": 0, "is_dynamic": False}
 
-        # עוצמה ונקודות כניסה
+        # 2. טעינה מקובץ WAV
+        y, sr = librosa.load(temp_wav, sr=None)
+        if len(y) == 0:
+            return {"energy_score": 0, "peaks": [], "onset_sec": 0, "bpm": 0, "is_dynamic": False}
+
         rms = librosa.feature.rms(y=y)[0]
         times = librosa.frames_to_time(range(len(rms)), sr=sr)
         
@@ -54,11 +72,9 @@ def analyze_audio_for_mashup(video_path: str) -> Dict[str, Any]:
         onsets = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr, units='time')
         first_onset = float(onsets[0]) if len(onsets) > 0 else 0.0
 
-        # שיאי אנרגיה
         peak_indices = np.argsort(rms)[-3:]
         peaks = sorted([round(float(times[i]), 2) for i in peak_indices])
 
-        # זיהוי קצב (BPM) לטובת סנכרון עם מוזיקת הרקע!
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
         bpm = float(tempo[0]) if isinstance(tempo, (list, np.ndarray)) else float(tempo)
 
@@ -73,26 +89,25 @@ def analyze_audio_for_mashup(video_path: str) -> Dict[str, Any]:
         }
     except Exception as e:
         print(f"    [!] Audio analysis failed for {os.path.basename(video_path)}: {e}")
-        return {"energy_score": 0, "peaks": [], "onset_sec": 0, "bpm": 0}
+        return {"energy_score": 0, "peaks": [], "onset_sec": 0, "bpm": 0, "is_dynamic": False}
+    finally:
+        if os.path.exists(temp_wav):
+            try: os.remove(temp_wav)
+            except: pass
 
 # --- Visual & System Functions ---
 
 def get_media_datetime(file_path: str, pil_img: Optional[PIL.Image.Image] = None) -> str:
-    """שואב תאריך יצירה מקורי מה-EXIF או נופל לתאריך קובץ"""
     try:
         if pil_img:
             exif = pil_img.getexif()
             if exif:
-                # 36867 is DateTimeOriginal, 306 is DateTime
                 dt_str = exif.get(36867) or exif.get(306)
                 if dt_str:
-                    # המרה מפורמט EXIF ל-ISO
                     dt_obj = datetime.strptime(str(dt_str), "%Y:%m:%d %H:%M:%S")
                     return dt_obj.isoformat()
-    except Exception:
-        pass
+    except Exception: pass
     
-    # Fallback למערכת הקבצים
     try:
         timestamp = os.path.getmtime(file_path)
         return datetime.fromtimestamp(timestamp).isoformat()
@@ -107,7 +122,6 @@ def pil_image_to_base64(img: PIL.Image.Image) -> str:
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 def extract_strategic_frames(video_path: str) -> Tuple[List[PIL.Image.Image], float]:
-    """מחלץ 5 פריימים משמעותיים לאיזון בין מהירות ודיוק נרטיבי"""
     frames = []
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened(): return frames, 0.0
@@ -116,7 +130,6 @@ def extract_strategic_frames(video_path: str) -> Tuple[List[PIL.Image.Image], fl
     fps = cap.get(cv2.CAP_PROP_FPS)
     duration = total_frames / fps if fps > 0 else 0.0
     
-    # דגימה ב: 0%, 25%, 50%, 75%, 90%
     indices = [int(total_frames * p) for p in [0.0, 0.25, 0.5, 0.75, 0.9]]
     
     for idx in indices:
@@ -141,7 +154,6 @@ def check_star_in_pil_image(pil_img: PIL.Image.Image, star_encodings: List[Any])
         return False, 0
 
 def classify_with_ollama(base64_image: str, retries: int = 2) -> Tuple[str, str]:
-    """תקשורת חסינה מול Ollama עם מנגנון Retry"""
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": "What is happening? Describe action/vibe. End with: [Portrait], [Friends/Group], [Funny], [Childhood], or [Action/Event].",
@@ -162,12 +174,11 @@ def classify_with_ollama(base64_image: str, retries: int = 2) -> Tuple[str, str]
                 clean_desc = raw_output.split('[')[0].strip().replace('\n', ' ')
                 return category, clean_desc
         except Exception as e:
-            time.sleep(2) # המתנה לפני ניסיון נוסף
+            time.sleep(2) 
             
     return "NeedsReview", "Failed to analyze image."
 
 def process_single_media(file_path: str, star_encodings: List[Any]) -> Dict[str, Any]:
-    """הפונקציה המרכזית לעיבוד קובץ בודד (מתוכננת לרוץ בת'רד נפרד)"""
     filename = os.path.basename(file_path)
     ext = os.path.splitext(filename)[1].lower()
     print(f"[*] Analyzing: {filename}...")
@@ -199,7 +210,6 @@ def process_single_media(file_path: str, star_encodings: List[Any]) -> Dict[str,
                 if desc and desc != "Failed to analyze image.":
                     descs.append(desc)
             
-            # בניית תיאור וידאו רציף ומאוחד
             media_data["raw_description"] = " | ".join(descs) if descs else "No clear description."
             media_data["category"] = "Action/Event"
             
@@ -217,11 +227,18 @@ def process_single_media(file_path: str, star_encodings: List[Any]) -> Dict[str,
             print(f"  [-] Failed image {filename}: {e}")
             media_data["category"] = "NeedsReview"
             
+    # ניקוי זיכרון אגרסיבי למניעת קריסות (Segmentation Faults)
+    gc.collect()
     return media_data
 
 def main():
+    # הגדרת אופציות דרך שורת הפקודה
+    parser = argparse.ArgumentParser(description="Sensory Media Analyzer Pro")
+    parser.add_argument("--force", action="store_true", help="Force re-analysis of all files, ignoring existing data.")
+    args = parser.parse_args()
+
     print("=" * 60)
-    print("Stage 1: Sensory Media Analyzer Pro (Multithreaded)")
+    print("Stage 1: Sensory Media Analyzer Pro (Incremental Mode)")
     print("=" * 60)
     
     if not os.path.exists(PHOTOS_DIR): sys.exit("ERROR: 'photos/' directory missing.")
@@ -235,23 +252,50 @@ def main():
         sys.exit(f"ERROR loading reference star: {e}")
     
     all_extensions = SUPPORTED_IMAGE_EXT.union(SUPPORTED_VIDEO_EXT)
-    files = [os.path.join(PHOTOS_DIR, f) for f in os.listdir(PHOTOS_DIR) if os.path.splitext(f)[1].lower() in all_extensions]
+    all_files = [os.path.join(PHOTOS_DIR, f) for f in os.listdir(PHOTOS_DIR) if os.path.splitext(f)[1].lower() in all_extensions]
     
-    print(f"Found {len(files)} media files. Firing up {MAX_WORKERS} parallel workers...\n")
-    
+    # חילוץ מידע קיים אם קיים ולא הופעל דגל ה-force
+    existing_data = {}
+    if not args.force and os.path.exists(OUTPUT_JSON):
+        try:
+            with open(OUTPUT_JSON, "r") as f:
+                old_data = json.load(f)
+                for item in old_data.get("photos", []):
+                    # נשמור רק פריטים שכבר עברו ניתוח ויש להם תיאור
+                    if item.get("raw_description") and item.get("raw_description") != "Failed to analyze image.":
+                        existing_data[item["filename"]] = item
+            print(f"[*] Found {len(existing_data)} previously analyzed items in {OUTPUT_JSON}.")
+        except Exception as e:
+            print(f"[*] Warning: Could not read existing {OUTPUT_JSON}: {e}")
+
     results = []
-    # הרצה מקבילית לפלט חזק ומהיר
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {executor.submit(process_single_media, f, star_encodings): f for f in files}
-        for count, future in enumerate(as_completed(futures), 1):
-            try:
-                data = future.result()
-                results.append(data)
-                print(f"  [+] Finished {count}/{len(files)}: {data['filename']}")
-            except Exception as e:
-                print(f"  [-] Critical failure on a worker thread: {e}")
-                
-    # סידור כרונולוגי לפני השמירה
+    files_to_process = []
+
+    # סינון קבצים שכבר נותחו
+    for f in all_files:
+        filename = os.path.basename(f)
+        if filename in existing_data:
+            print(f"  [>] Skipping {filename} (Already analyzed)")
+            results.append(existing_data[filename])
+        else:
+            files_to_process.append(f)
+
+    if files_to_process:
+        print(f"\n[*] Firing up {MAX_WORKERS} parallel workers for {len(files_to_process)} NEW media files...\n")
+        
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {executor.submit(process_single_media, f, star_encodings): f for f in files_to_process}
+            for count, future in enumerate(as_completed(futures), 1):
+                try:
+                    data = future.result()
+                    results.append(data)
+                    print(f"  [+] Finished {count}/{len(files_to_process)}: {data['filename']}")
+                except Exception as e:
+                    print(f"  [-] Critical failure on a worker thread: {e}")
+    else:
+        print("\n[*] All files are already analyzed! (Use --force to run anyway)")
+
+    # סידור כרונולוגי לפני השמירה מחדש
     results.sort(key=lambda x: x.get("datetime", ""))
     
     with open(OUTPUT_JSON, "w") as f:
