@@ -6,13 +6,13 @@ This directory contains a collection of soundboard trigger images numbered 1 thr
 
 | File | Description |
 |------|-------------|
-| ![1.png](1.png) | Soundboard trigger image #1 |
-| ![2.png](2.png) | Soundboard trigger image #2 |
-| ![3.png](3.png) | Soundboard trigger image #3 |
-| ![4.png](4.png) | Soundboard trigger image #4 |
-| ![5.png](5.png) | Soundboard trigger image #5 |
-| ![6.png](6.png) | Soundboard trigger image #6 |
-| ![7.png](7.png) | Soundboard trigger image #7 |
+| ![1.png](1.png) | Root Page |
+| ![2.png](2.png) | Power Page |
+| ![3.png](3.png) | MCU Page |
+| ![4.png](4.png) | Motor Page |
+| ![5.png](5.png) | Audio Page |
+| ![6.png](6.png) | Communication Page |
+| ![7.png](7.png) | Stator Page |
 
 ## Usage
 
