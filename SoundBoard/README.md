@@ -1,6 +1,6 @@
 # SoundBoard
 
-This directory contains a collection of soundboard trigger images numbered 1 through 7.
+This directory contains a collection of soundboard images.
 
 ## Files
 
