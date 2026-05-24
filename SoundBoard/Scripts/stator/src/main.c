@@ -11,14 +11,24 @@
 #include "stator/include/safety.h"
 #include "stator/include/audio.h"
 
+#define RUN_DIAGNOSTIC_MODE 1
+
 static const char *TAG = "MAIN_BOOT";
 
 void app_main(void)
 {
+    
     ESP_LOGI(TAG, "========================================");
     ESP_LOGI(TAG, "   SoundBoard Stator Boot Sequence      ");
     ESP_LOGI(TAG, "========================================");
 
+    #ifdef RUN_DIAGNOSTIC_MODE
+    // אם אנחנו במצב דיאגנוסטיקה, תריץ רק את ה-CLI ואל תפעיל שום דבר אחר!
+    diagnostic_run_cli(); 
+    return; // לעולם לא נגיע לכאן, אבל שומר על לוגיקה נכונה
+    
+    #endif
+    
     // 1. אתחול NVS (זיכרון קבוע לא נדיף) - נדרש עבור תתי-מערכות פנימיות רבות ב-ESP-IDF
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
