@@ -6,13 +6,13 @@ This directory contains a collection of soundboard images.
 
 | File | Description |
 |------|-------------|
-| ![1.png](1.png) | Root Page |
-| ![2.png](2.png) | Power Page |
-| ![3.png](3.png) | MCU Page |
-| ![4.png](4.png) | Motor Page |
-| ![5.png](5.png) | Audio Page |
-| ![6.png](6.png) | Communication Page |
-| ![7.png](7.png) | Stator Page |
+| ![1.png](Schem/1.png) | Root Page |
+| ![2.png](Schem/2.png) | Power Page |
+| ![3.png](Schem/3.png) | MCU Page |
+| ![4.png](Schem/4.png) | Motor Page |
+| ![5.png](Schem/5.png) | Audio Page |
+| ![6.png](Schem/6.png) | Communication Page |
+| ![7.png](Schem/7.png) | Stator Page |
 
 ## Usage
 
