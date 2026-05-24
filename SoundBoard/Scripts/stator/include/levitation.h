@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "esp_attr.h"
 #include "driver/gptimer.h"
 
 /* ============================================================
@@ -27,6 +28,7 @@ typedef struct {
     // משתני זיכרון של הלולאה (History)
     float integral;
     float prev_error;
+    float derivative;
     float last_output;
 } pid_controller_t;
 
@@ -76,13 +78,13 @@ esp_err_t levitation_start_loop(void);
 
 /**
  * @brief Core PID math logic. Marked as IRAM_ATTR to execute directly from RAM.
- * Calculates the next PWM duty cycle based on current error and PID history.
+ * Calculates the next PWM duty cycle based on configured target and current measurement.
  */
-float IRAM_ATTR levitation_update_axis_pid(pid_controller_t *pid, float error, float dt);
+float levitation_update_axis_pid(pid_controller_t *pid, float target, float current, float dt);
 
 /**
  * @brief ESP-IDF compliant timer callback. Executes at 10kHz on Core 0.
  */
-bool IRAM_ATTR levitation_timer_cb(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx);
+bool levitation_timer_cb(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx);
 
 #endif /* LEVITATION_H */

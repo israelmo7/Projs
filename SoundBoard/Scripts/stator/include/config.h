@@ -17,9 +17,9 @@
 #define HALL2_PIN            2       ///< GPIO 2 (ADC1_CHANNEL_1)
 #define HALL3_PIN            3       ///< GPIO 3 (ADC1_CHANNEL_2)
 
-#define HALL1_ADC_CHANNEL    ADC1_CHANNEL_0
-#define HALL2_ADC_CHANNEL    ADC1_CHANNEL_1
-#define HALL3_ADC_CHANNEL    ADC1_CHANNEL_2
+#define HALL1_ADC_CHANNEL    ADC_CHANNEL_0
+#define HALL2_ADC_CHANNEL    ADC_CHANNEL_1
+#define HALL3_ADC_CHANNEL    ADC_CHANNEL_2
 
 /* ============================================================
  * LEVITATION: ACTIVE STABILIZATION COILS (3x DRV8871 H-Bridges)
