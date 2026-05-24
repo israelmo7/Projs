@@ -51,6 +51,6 @@ After running `pio run`, the built firmware will be located in:
 
 ## Related Files
 
-- `coilmaker.py` - Main soundboard processing script
-- `images/` - Directory containing image assets
+- `coilmaker.py` - Coils maker for KiCAD
+- `images/` - Memories
 - `Scripts/` - PlatformIO project files for stator and rotor firmware
