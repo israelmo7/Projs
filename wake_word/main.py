@@ -1,5 +1,6 @@
 import subprocess
 import os
+import time
 
 SCRIPT_SEQUENCE = [
     "generate_tts.py",
@@ -17,7 +18,7 @@ def run_step(script_name):
         print(f"❌ Error in {script_name}. Stopping pipeline.")
         exit(1)
     print(f"✅ Finished: {script_name}")
-
+    time.sleep(1)
 
 def main():
     for script in SCRIPT_SEQUENCE:
