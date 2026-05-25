@@ -27,17 +27,13 @@ WiFiUDP udp;
 const int READ_CHUNK_SIZE = 2048; 
 uint8_t* i2sBuffer;
 
-// באפר ליניארי פשוט שמחזיק את ה-16000 דגימות האחרונות (שנייה אחת רציפה)
+// באפר ליניארי פשוט שמחזיק את ה-16000 דגימות האחרונות
 int16_t* audioWindow; 
 
 // --- הגדרות TensorFlow Lite Micro ---
 #define ARENA_SIZE (40 * 1024) 
 uint8_t tensorArena[ARENA_SIZE];
-
-// המודל מצפה ל-40 מקדמי MFCC (גודל הקלט הכולל תלוי במספר החלונות בזמן, למשל 40x32)
-// נגדיר את הקלט הליניארי של ה-Tensor בהתאם למודל שלך
-#define MODEL_INPUT_SIZE 1280 // דוגמה: 40 מקדמים * 32 חלונות זמן. שנה לפי המודל שלך!
-
+#define MODEL_INPUT_SIZE 1280 
 Eloquent::TinyML::TfLite<MODEL_INPUT_SIZE, 2, ARENA_SIZE> ml;
 
 enum SystemState { LOCAL_LISTENING, STREAMING_COMMAND };
@@ -45,6 +41,14 @@ SystemState currentState = LOCAL_LISTENING;
 
 unsigned long streamStartTime = 0;
 uint32_t packetSeq = 0;
+
+// =========================================================================
+// 🌟 התיקון: מערכים ענקיים הועברו לזיכרון הגלובלי כדי למנוע Stack Overflow
+// =========================================================================
+int16_t newSamples[READ_CHUNK_SIZE / 4]; // באפר זמני לקריאה מהמיקרופון (512 דגימות)
+float inputFeatures[MODEL_INPUT_SIZE];   // מערך הפיצ'רים שיוזן למודל (5KB)
+uint8_t udpPacket[1032];                 // חבילת הרשת לשידור (1KB)
+float outputFeatures[2] = {0.0f, 0.0f};  // תוצאות החיזוי
 
 void setupI2S() {
     i2s_config_t i2s_config = {
@@ -83,18 +87,10 @@ void connectToWiFi() {
     Serial.println(" Connected!");
 }
 
-// --- פונקציית חילוץ הפיצ'רים על החומרה ---
-void extractFeaturesOnESP(int16_t* audioSrc, int8_t* featuresOut) {
-    // אתחול ספריה מתמטית של ה-DSP
-    esp_err_t ret = dsps_fft2r_init_fc32(NULL, CONFIG_DSP_MAX_FFT_SIZE);
-    
-    // מעבר על האודיו בחלונות זמן וחישוב האנרגיה לכל ערוץ Mel
-    // כאן מתבצעת הקוונטיזציה ל-Int8 (טווח של 128- עד 127) כדי להתאים למודל
+void extractFeaturesOnESP(int16_t* audioSrc, float* featuresOut) {
     for (int i = 0; i < MODEL_INPUT_SIZE; i++) {
-        // מנרמלים וממירים את נתוני האודיו הגולמיים לערכי הפיצ'רים של המודל
         float energy = (float)abs(audioSrc[i * (SIGNAL_LENGTH / MODEL_INPUT_SIZE)]);
-        int8_t quantizedValue = (int8_t)((energy / 32768.0f) * 127.0f);
-        featuresOut[i] = quantizedValue;
+        featuresOut[i] = (energy / 32768.0f) * 127.0f;
     }
 }
 
@@ -103,7 +99,6 @@ void setup() {
     delay(3000);
     Serial.println("\n🤖 Nevo Autonomous Ear Booting...");
 
-    // הקצאת זיכרון ב-PSRAM
     i2sBuffer = (uint8_t*)heap_caps_malloc(READ_CHUNK_SIZE, MALLOC_CAP_SPIRAM);
     audioWindow = (int16_t*)heap_caps_malloc(SIGNAL_LENGTH * sizeof(int16_t), MALLOC_CAP_SPIRAM);
     memset(audioWindow, 0, SIGNAL_LENGTH * sizeof(int16_t));
@@ -130,32 +125,35 @@ void loop() {
     if (result == ESP_OK && bytesRead > 0) {
         int32_t* rawSamples = (int32_t*)i2sBuffer;
         int numSamples = bytesRead / 4;
-        int16_t newSamples[numSamples];
         
         for (int i = 0; i < numSamples; i++) {
             newSamples[i] = (int16_t)(rawSamples[i] >> 14);
         }
 
         if (currentState == LOCAL_LISTENING) {
-            // הזזת החלון שמאלה והכנסת הדגימות החדשות מימין (Sliding Window על החומרה)
             memmove(audioWindow, audioWindow + numSamples, (SIGNAL_LENGTH - numSamples) * sizeof(int16_t));
             memcpy(audioWindow + (SIGNAL_LENGTH - numSamples), newSamples, numSamples * sizeof(int16_t));
 
-            // חילוץ פיצ'רים והרצת המודל
-            int8_t inputFeatures[MODEL_INPUT_SIZE];
-            int8_t outputFeatures[2] = {0,0}; // מערך פלט בגודל 1 עבור תוצאת החיזוי
-            
-            extractFeaturesOnESP(audioWindow, inputFeatures); 
+            int16_t maxSample = 0;
+            for (int i = 0; i < numSamples; i++) {
+                if (abs(newSamples[i]) > maxSample) maxSample = abs(newSamples[i]);
+            }
 
-            // הרצת החיזוי ומילוי מערך הפלט
-            ml.predict((uint8_t*)inputFeatures, (uint8_t*)outputFeatures);            
-            // אם המודל מזהה ביטחון גבוה (מעל 100 מתוך 127 בקוונטיזציית Int8)
-            if (outputFeatures[1] > outputFeatures[0] && outputFeatures[1] > 0) { 
-                Serial.println("\n🔥 [🔥] WAKE WORD DETECTED LOCALLY!");
-                
+            extractFeaturesOnESP(audioWindow, inputFeatures); 
+            ml.predict(inputFeatures, outputFeatures);            
+            
+            #define PRINT_THROTTLE_MS 500
+            static unsigned long lastPrintTime = 0;
+            if (millis() - lastPrintTime > PRINT_THROTTLE_MS) {
+                lastPrintTime = millis();
+                Serial.printf("[Mic Vol: %5d] | Background: %.2f | WakeWord: %.2f\n", 
+                              maxSample, outputFeatures[0], outputFeatures[1]);
+            }
+
+            if (outputFeatures[1] > 0.80f) { 
+                Serial.printf("\n🔥 [🔥] WAKE WORD DETECTED! Confidence: %.2f\n", outputFeatures[1]);
                 connectToWiFi(); 
                 
-                // שליחת ה-Cache (השנייה האחרונה) ישירות לרסברי
                 udp.beginPacket(hostIP, port);
                 uint32_t header[2] = {packetSeq++, millis()};
                 udp.write((uint8_t*)header, 8);
@@ -167,15 +165,13 @@ void loop() {
             }
 
         } else if (currentState == STREAMING_COMMAND) {
-            // הזרמה רציפה בזמן אמת של המשך המשפט
-            uint8_t packet[1032];
             uint32_t timestamp = millis();
-            memcpy(&packet[0], &packetSeq, 4);       
-            memcpy(&packet[4], &timestamp, 4);       
-            memcpy(&packet[8], newSamples, numSamples * 2); 
+            memcpy(&udpPacket[0], &packetSeq, 4);       
+            memcpy(&udpPacket[4], &timestamp, 4);       
+            memcpy(&udpPacket[8], newSamples, numSamples * 2); 
 
             udp.beginPacket(hostIP, port);
-            udp.write(packet, (numSamples * 2) + 8);
+            udp.write(udpPacket, (numSamples * 2) + 8);
             udp.endPacket();
             packetSeq++;
 

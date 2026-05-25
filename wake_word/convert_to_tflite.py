@@ -9,6 +9,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
 
 # === Configuration ===
 MODEL_PATH = "models/wake_word_model.h5"

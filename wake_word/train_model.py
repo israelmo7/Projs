@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Train a CNN for Wake Word Spotting - גרסה יציבה ל-Apple Silicon
+Train a CNN for Wake Word Spotting - גרסה יציבה מותאמת ל-ESP32 (TinyML)
+כולל תיקון סיווג ל-2 מחלקות (Softmax) והסרת תלויות בעייתיות בהמרה
 """
 
 import os
@@ -12,8 +13,8 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 os.environ['GRPC_VERBOSITY'] = 'ERROR'
 os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
-# ניסיון להפעיל Metal (GPU של Apple) - הסר אם רוצה CPU בלבד
-# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"   # ← הסר את ה# אם רוצה CPU בלבד
+# אילוץ ריצה על CPU אם יש שגיאות Metal ב-M4
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"   
 
 import numpy as np
 import tensorflow as tf
@@ -48,35 +49,34 @@ X_train = X_train[..., np.newaxis]
 X_val   = X_val[..., np.newaxis]
 
 # === Build Model ===
-print("\nBuilding Model...")
+print("\nBuilding Model (TinyML Optimized Architecture)...")
 
 model = tf.keras.Sequential([
     tf.keras.layers.Input(shape=(X_train.shape[1], X_train.shape[2], 1)),
     
+    # בלוק 1
     tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same'),
-    tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same'),
-    tf.keras.layers.MaxPooling2D((2, 2)),
-    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Conv2D(16, (3, 3), strides=(2, 2), activation='relu', padding='same'),
     
+    # בלוק 2
     tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
-    tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
-    tf.keras.layers.MaxPooling2D((2, 2)),
-    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Conv2D(32, (3, 3), strides=(2, 2), activation='relu', padding='same'),
     
+    # בלוק 3
     tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
-    tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
-    tf.keras.layers.MaxPooling2D((2, 2)),
-    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2), activation='relu', padding='same'),
     
     tf.keras.layers.Flatten(),
     tf.keras.layers.Dense(128, activation='relu'),
     tf.keras.layers.Dropout(0.5),
-    tf.keras.layers.Dense(1, activation='sigmoid')
+    
+    # 🌟 התיקון הקריטי: 2 פלטים (אינדקס 0 = רקע, אינדקס 1 = מילת התעוררות)
+    tf.keras.layers.Dense(2, activation='softmax')
 ])
 
 model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-    loss='binary_crossentropy',
+    loss='sparse_categorical_crossentropy',
     metrics=['accuracy']
 )
 
@@ -96,4 +96,4 @@ history = model.fit(
 # === Save ===
 os.makedirs(MODEL_DIR, exist_ok=True)
 model.save(os.path.join(MODEL_DIR, MODEL_NAME))
-print(f"\nModel saved to {MODEL_DIR}/{MODEL_NAME}")
+print(f"\n✅ Model saved successfully to {MODEL_DIR}/{MODEL_NAME}")
