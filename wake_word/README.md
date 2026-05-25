@@ -1,6 +1,10 @@
-# Wake Word Detection Project
+# Wake Word Detection Project - "Nevo"
 
-A complete pipeline for training and deploying a wake word recognition model (e.g., "Hey Nevo") using TensorFlow/Keras with TensorFlow Lite Micro support for ESP32-S3 deployment.
+A complete pipeline for training and deploying a wake word recognition model ("Hey Nevo") using TensorFlow/Keras with TensorFlow Lite Micro support for ESP32-S3 deployment.
+
+The system consists of two main components:
+- **Python ML Pipeline**: Train and convert models for embedded deployment
+- **Firmware**: ESP32-S3 firmware for audio capture and inference
 
 ---
 
@@ -12,53 +16,77 @@ wake_word/
 │   ├── clean/                  # Clean audio samples for negative training
 │   ├── noise/                  # Background noise samples for augmentation
 │   ├── positive_raw/           # Raw "Hey Nevo" audio files
-│   ├── train/                  # Training data (positive/negative splits)
-│   └── test/                   # Test dataset
-├── models/                     # Trained models
-│   ├── wake_word_model.h5      # Keras model (PyTorch/TensorFlow)
-│   ├── wake_word_model.tflite  # TensorFlow Lite quantized model
-│   ├── model_data.h            # C header for direct inclusion in firmware
+│   └── train/                  # Training data (positive/negative splits)
+├── models/                     # Trained model artifacts
+│   ├── model_data.h           # C header for direct inclusion in firmware
 │   └── requirements.txt        # Model deployment dependencies
-├── prepared_features/          # Preprocessed MFCC features
-│   ├── data_train.npy          # Training MFCC features
-│   ├── data_val.npy            # Validation MFCC features
-│   └── y_data_train.npy         # Training labels (1=positive, 0=negative)
-├── raw_audio/                  # Generated TTS audio files
-└── *.py                        # Python scripts
+├── Firmware/                   # ESP32-S3 Firmware
+│   ├── src/                   # Firmware source code
+│   │   └── main.cpp          # Main firmware logic
+│   ├── include/               # Header files
+│   ├── lib/                   # Dependencies
+│   ├── platformio.ini        # PlatformIO configuration
+│   └── test/                  # Testing utilities
+├── *.py                       # Python scripts
+│   ├── main.py                # Full ML pipeline runner
+│   ├── generate_tts.py        # Generate synthetic wake word audio
+│   ├── prepare_dataset.py     # Prepare and augment dataset
+│   ├── extract_features.py    # Extract MFCC features
+│   ├── train_model.py         # Train CNN model
+│   ├── convert_to_tflite.py   # Convert to TensorFlow Lite Micro
+│   ├── run_pipeline.py        # Execute full ML pipeline
+│   ├── live_inference.py      # Real-time microphone detection
+│   ├── test_model_live.py     # Test model with live input
+│   └── neve_brain.py          # Serial handler for ESP32 communication
+├── requirements.txt           # Python dependencies
+└── README.md                  # This file
 ```
 
 ---
 
 ## 📄 Files and Their Purposes
 
+### Python ML Pipeline Scripts
+
 | File | Purpose |
-|------|---------|
+|------|-------|
 | **`generate_tts.py`** | Generates synthetic "Hey Nevo" audio samples using Azure TTS with various voices, rates, and pitches. Creates diverse training data. |
-| **`prepare_dataset.py`** | Prepares the dataset by: 1) Loading raw audio, 2) Applying data augmentation (pitch shift, time stretch, noise injection), 3) Generating negative samples, 4) Organizing files into train directories. |
+| **`prepare_dataset.py`** | Prepares the dataset by loading raw audio, applying data augmentation (pitch shift, time stretch, noise injection), generating negative samples, and organizing files into train directories. |
 | **`extract_features.py`** | Extracts MFCC (Mel-frequency Cepstral Coefficients) features from audio files. Pads/trims audio to uniform duration and splits into train/validation sets. Saves as NumPy arrays. |
-| **`train_model.py`** | Builds and trains a CNN model using TensorFlow/Keras. Accepts pretrained MFCC features and train/val splits. Outputs a trained `.h5` model. |
-| **`convert_to_tflite.py`** | Converts the trained Keras model to TensorFlow Lite format with Int8 quantization. Generates a C header file (`model_data.h`) for direct inclusion in ESP32 firmware. |
+| **`train_model.py`** | Builds and trains a CNN model using TensorFlow/Keras. Accepts pre-extracted MFCC features and train/val splits. Outputs a trained `.h5` model. |
+| **`convert_to_tflite.py`** | Converts the trained Keras model to TensorFlow Lite format with Int8 quantization. Generates C header file (`model_data.h`) for direct inclusion in ESP32 firmware. |
 | **`run_pipeline.py`** | Executes the full ML pipeline in order: `generate_tts` → `prepare_dataset` → `extract_features` → `train_model` → `convert_to_tflite`. |
 | **`live_inference.py`** | Real-time wake word detection from microphone input. Processes audio chunks, extracts MFCC features, and runs inference on the trained model. Prints confidence scores. |
-| **`nevo_brain.py`** | Serial communication handler for ESP32-S3. Receives audio data via UART, buffers audio after wake detection, and forwards to AI processor for processing. |
-| **`requirements.txt`** | Dependencies for the model deployment. Use `pip install -r requirements.txt` to install. |
+| **`test_model_live.py`** | Alternative real-time inference script for testing the model with live audio input. |
+| **`neve_brain.py`** | Serial communication handler for ESP32-S3. Receives audio data via UART, buffers audio after wake detection, and forwards to AI processor for processing. |
+| **`main.py`** | Master pipeline script that runs all ML steps in sequence. Call `python main.py` to run the complete pipeline. |
+
+### Firmware Files
+
+| File | Purpose |
+|------|-------|
+| **`Firmware/src/main.cpp`** | Main firmware source for ESP32-S3. Handles I2S audio capture, TF Lite Micro inference, WiFi streaming, and network communication. |
+| **`Firmware/platformio.ini`** | PlatformIO configuration for ESP32-S3 DevKit. Defines board, libraries (EloquentTinyML), and build flags. |
+| **`Firmware/secrets.h`** | Configuration file for WiFi credentials and other secrets. Copy from `secrets_example.h` and edit. |
 
 ---
 
-## 🎯 How to Create a Wake Word Detection Model
+## 🎯 How to Train a Wake Word Detection Model
+
+### Prerequisites
+
+```bash
+# Python 3.8+ and dependencies
+pip install -r requirements.txt
+```
 
 ### Option 1: Run Full Pipeline (Recommended for Training from Scratch)
-
-This runs all steps in order to train a model from scratch:
 
 ```bash
 cd wake_word
 
-# 1. Install dependencies
-pip install -r models/requirements.txt
-
-# 2. Run the full pipeline
-python run_pipeline.py
+# Run the complete pipeline
+python main.py
 ```
 
 The pipeline will:
@@ -70,8 +98,6 @@ The pipeline will:
 6. Generate C header file for ESP32 deployment
 
 ### Option 2: Step-by-Step (Manual Control)
-
-For more control, run each step individually:
 
 ```bash
 # Step 1: Generate synthetic audio samples
@@ -90,13 +116,57 @@ python train_model.py
 python convert_to_tflite.py
 ```
 
-### Option 3: Test Pretrained Model
+---
 
-If you have a pretrained model in `models/wake_word_model.h5`, you can skip training steps and go straight to testing:
+## 🎯 How to Deploy on ESP32-S3
+
+### 1. Build Firmware
 
 ```bash
-# Test with microphone input
-python live_inference.py
+cd Firmware
+
+# Build using PlatformIO CLI
+pio run
+
+# Or build and upload directly
+pio run -t upload
+```
+
+### 2. Upload to Device
+
+```bash
+# Upload to ESP32-S3 DevKit
+pio run -t upload
+
+# Specify custom port if needed
+pio run -t upload -p /dev/ttyUSB0
+```
+
+### 3. Configuration
+
+Before uploading, copy and edit the secrets file:
+
+```bash
+cd Firmware
+cp secrets_example.h secrets.h
+# Edit secrets.h with your WiFi credentials
+```
+
+### 4. Monitor Serial Output
+
+```bash
+# Open serial monitor (115200 baud)
+pio device monitor
+
+# Or use PlatformIO CLI
+pio device monitor
+```
+
+Expected startup output:
+```
+🤖 Nevo Autonomous Ear Booting...
+✅ AI Model Loaded into S3 Core.
+🎧 Mode: LOCAL LISTENING (Silent Network)
 ```
 
 ---
@@ -141,6 +211,20 @@ python neve_brain.py
 
 This script handles serial communication to receive audio data from the ESP32's ADC and forwards to the AI processor for processing.
 
+### Test Firmware Directly
+
+```bash
+# Open PlatformIO Serial Monitor
+cd Firmware
+pio device monitor
+```
+
+The ESP32 will listen locally and print:
+```
+[Mic Vol: XXXX] | Background: 0.00 | WakeWord: 0.00
+🔥 [🔥] WAKE WORD DETECTED! Confidence: 0.85
+```
+
 ---
 
 ## 📊 Dataset Configuration
@@ -154,17 +238,20 @@ The dataset includes:
 
 ---
 
-## 📦 Deployment
+## 📦 Model Artifacts
 
-The trained model is converted to TensorFlow Lite Micro format and packaged as:
-- `wake_word_model.tflite` - The quantized model binary
-- `model_data.h` - C header file with the model data as a const array
+After training, the following files are generated in the `models/` directory:
 
-These files can be directly included in ESP-IDF or Arduino projects for embedded deployment on ESP32-S3.
+- `model_data.h` - C header file with model data as a const array (included in firmware)
+- Compiled model binary for deployment
+
+These are automatically included in the firmware build via `#include "../../models/model_data.h"`
 
 ---
 
 ## 🔧 Requirements
+
+### Python Environment
 
 ```
 Python >= 3.8
@@ -178,9 +265,25 @@ pyaudio
 ```
 
 Install with:
+
 ```bash
-pip install -r models/requirements.txt
+pip install -r requirements.txt
 ```
+
+### Firmware Dependencies
+
+- PlatformIO with ESP32 package
+- EloquentTinyML (EloquentTinyML@^0.0.3)
+
+---
+
+## 🌐 Network Mode
+
+When the wake word is detected (confidence > 0.8):
+1. ESP32 connects to WiFi
+2. Sends buffered 1-second audio chunk via UDP
+3. Listens for commands from AI processor
+4. After 5 seconds, returns to local listening mode
 
 ---
 
@@ -194,5 +297,30 @@ MIT License
 
 1. **First run**: Always run the full pipeline to train the model from scratch
 2. **Audio quality**: Ensure microphone is connected and working before running `live_inference.py`
-3. **Threshold tuning**: Modify `DETECTION_THRESHOLD` in `live_inference.py` to adjust sensitivity
+3. **Threshold tuning**: Modify detection threshold in firmware (`#define` near line 153 in `main.cpp`) to adjust sensitivity
 4. **Model size**: The quantized model is ~100KB, suitable for embedded deployment
+5. **WiFi credentials**: Edit `Firmware/secrets.h` before uploading to your device
+6. **PSRAM required**: ESP32-S3 must have PSRAM enabled (automatic in platformio.ini)
+7. **Serial monitor**: Use 115200 baud rate when monitoring firmware output
+
+---
+
+## 🐛 Troubleshooting
+
+### Firmware won't upload
+- Check USB connection and board recognition
+- Ensure PlatformIO ESP32 package is installed: `pio update`
+
+### Model inference errors
+- Verify `model_data.h` is in the root directory
+- Check that `models/` folder exists in project root
+- Ensure model was converted with `convert_to_tflite.py`
+
+### No audio input
+- Check I2S pin configuration in `Firmware/src/main.cpp`
+- Verify microphone/jack connection
+
+### WiFi connection fails
+- Verify credentials in `secrets.h`
+- Check router SSID/password
+- Ensure WiFi signal is strong enough

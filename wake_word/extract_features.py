@@ -16,14 +16,15 @@ DATASET_PATH = "dataset"
 OUTPUT_DIR = "prepared_features"
 
 SAMPLE_RATE = 16000
-
 def extract_esp32_compatible_features(audio_data_int16):
     """
     מחלץ פיצ'רים בפייתון בדיוק באותה צורה שה-ESP32 מחשב אותם בחומרה.
+    משולב ZCR + Energy (אנרגיה ותדר) למניעת עיוורון הרשת.
     מקבל מערך אודיו ליניארי של שנייה אחת (16000 דגימות ב-int16).
     """
     SIGNAL_LENGTH = 16000
-    MODEL_INPUT_SIZE = 1280
+    WINDOWS = 64
+    STEP = SIGNAL_LENGTH // WINDOWS # 250 דגימות לכל חלון של 15.6 מילי-שנייה
     
     # ודא שהקובץ הוא בדיוק באורך של שנייה אחת
     if len(audio_data_int16) < SIGNAL_LENGTH:
@@ -31,24 +32,28 @@ def extract_esp32_compatible_features(audio_data_int16):
     else:
         audio_data_int16 = audio_data_int16[:SIGNAL_LENGTH]
         
-    # שינוי ל-float32 כדי להתאים במדויק לקלט החדש של ה-ESP32
-    features = np.zeros(MODEL_INPUT_SIZE, dtype=np.float32)
-    step = SIGNAL_LENGTH // MODEL_INPUT_SIZE # שווה ל-12
+    # מטריצה דו-מימדית: 64 חלונות זמן, 2 פיצ'רים בכל חלון
+    features = np.zeros((WINDOWS, 2), dtype=np.float32)
     
-    # חישוב ממוצע אנרגיה על כל החלון כדי לייצר "מעטפת קול" חסינה ל-Aliasing
-    for i in range(MODEL_INPUT_SIZE):
-        idx = i * step
-        # לקיחת חלון של 12 דגימות
-        window = audio_data_int16[idx : idx + step]
+    for i in range(WINDOWS):
+        start = i * STEP
+        window = audio_data_int16[start : start + STEP]
+        
         if len(window) > 0:
-            # ממוצע אמת במקום דגימה בודדת
+            # 🌟 פיצ'ר 1: אנרגיה ממוצעת בחלון (עוצמת הקול)
             avg_energy = np.mean(np.abs(window))
-            # נרמול לטווח 0.0 עד 127.0 ושמירה כ-float
-            features[i] = (avg_energy / 32768.0) * 127.0
+            features[i, 0] = avg_energy / 32768.0
             
-    # החזרת המטריצה במימדים שהמודל הדו-מימדי מצפה להם
-    return features.reshape(32, 40)
-
+            # 🌟 פיצ'ר 2: ZCR (Zero Crossing Rate - תדר הגל)
+            crossings = 0
+            for j in range(1, len(window)):
+                if (window[j] >= 0 and window[j-1] < 0) or (window[j] < 0 and window[j-1] >= 0):
+                    crossings += 1
+            features[i, 1] = crossings / STEP
+            
+    # מחזיר מטריצה נקייה בגודל (64, 2) ללא צורך ב-Reshape דו-מימדי ישן
+    return features
+    
 def load_data():
     X = []
     y = []

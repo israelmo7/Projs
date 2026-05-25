@@ -33,7 +33,7 @@ int16_t* audioWindow;
 // --- הגדרות TensorFlow Lite Micro ---
 #define ARENA_SIZE (40 * 1024) 
 uint8_t tensorArena[ARENA_SIZE];
-#define MODEL_INPUT_SIZE 1280 
+#define MODEL_INPUT_SIZE 128
 Eloquent::TinyML::TfLite<MODEL_INPUT_SIZE, 2, ARENA_SIZE> ml;
 
 enum SystemState { LOCAL_LISTENING, STREAMING_COMMAND };
@@ -88,9 +88,31 @@ void connectToWiFi() {
 }
 
 void extractFeaturesOnESP(int16_t* audioSrc, float* featuresOut) {
-    for (int i = 0; i < MODEL_INPUT_SIZE; i++) {
-        float energy = (float)abs(audioSrc[i * (SIGNAL_LENGTH / MODEL_INPUT_SIZE)]);
-        featuresOut[i] = (energy / 32768.0f) * 127.0f;
+    int windows = 64;
+    int step = SIGNAL_LENGTH / windows; // 250
+    
+    for (int i = 0; i < windows; i++) {
+        long energySum = 0;
+        int zcrCount = 0;
+        int startIndex = i * step;
+        
+        for (int j = 0; j < step; j++) {
+            int16_t val = audioSrc[startIndex + j];
+            energySum += abs(val);
+            
+            // חישוב ZCR
+            if (j > 0) {
+                int16_t prev = audioSrc[startIndex + j - 1];
+                if ((val >= 0 && prev < 0) || (val < 0 && prev >= 0)) {
+                    zcrCount++;
+                }
+            }
+        }
+        
+        float avgEnergy = (float)energySum / step;
+        // הכנסת הערכים ברצף: פעם אנרגיה, פעם ZCR
+        featuresOut[i * 2] = avgEnergy / 32768.0f; 
+        featuresOut[i * 2 + 1] = (float)zcrCount / step; 
     }
 }
 
