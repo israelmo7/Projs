@@ -1,328 +1,161 @@
-# Wake Word Detection Project - "Nevo"
+# Wake Word "Nevo" — Full-Stack Portfolio
 
-A complete pipeline for training and deploying a wake word recognition model ("Hey Nevo") using TensorFlow/Keras with TensorFlow Lite Micro support for ESP32-S3 deployment.
+Custom Hebrew wake word detection (**"היי נבו"**) with a complete ML pipeline, ESP32-S3 edge deployment, and a React dashboard for live demo.
 
-The system consists of two main components:
-- **Python ML Pipeline**: Train and convert models for embedded deployment
-- **Firmware**: ESP32-S3 firmware for audio capture and inference
-
----
-
-## 📁 Project Structure
+## Architecture
 
 ```
-wake_word/
-├── dataset/                    # Audio datasets
-│   ├── clean/                  # Clean audio samples for negative training
-│   ├── noise/                  # Background noise samples for augmentation
-│   ├── positive_raw/           # Raw "Hey Nevo" audio files
-│   └── train/                  # Training data (positive/negative splits)
-├── models/                     # Trained model artifacts
-│   ├── wake_word_model.h5      # Trained Keras model (saved before conversion)
-│   └── wake_word_model.tflite  # Quantized TFLite model for deployment
-├── Firmware/                   # ESP32-S3 Firmware
-│   ├── src/                   # Firmware source code
-│   │   └── main.cpp          # Main firmware logic
-│   ├── include/               # Header files
-│   ├── lib/                   # Dependencies
-│   ├── platformio.ini        # PlatformIO configuration
-│   └── test/                  # Testing utilities
-├── *.py                       # Python scripts
-│   ├── main.py                # Full ML pipeline runner
-│   ├── generate_tts.py        # Generate synthetic wake word audio
-│   ├── prepare_dataset.py     # Prepare and augment dataset
-│   ├── extract_features.py    # Extract Energy and ZCR features
-│   ├── train_model.py         # Train CNN model
-│   ├── convert_to_tflite.py   # Convert to TensorFlow Lite Micro
-│   ├── run_pipeline.py        # Execute full ML pipeline
-│   ├── live_inference.py      # Real-time microphone detection
-│   ├── test_model_live.py     # Test model with live input
-│   └── neve_brain.py          # Serial handler for ESP32 communication
-├── requirements.txt           # Python dependencies
-└── README.md                  # This file
+TTS → Augment → Energy+ZCR Features → Conv1D → INT8 TFLite → ESP32 / Browser → Whisper
 ```
 
----
+| Layer | Tech |
+|-------|------|
+| ML Pipeline | Python, TensorFlow 2.16, edge-tts, librosa |
+| Inference | Shared `features.py` + `inference/engine.py` |
+| Backend | FastAPI, WebSocket, UDP :5555, faster-whisper |
+| Frontend | React 18, Vite, TypeScript, Tailwind, Recharts |
+| Firmware | ESP32-S3, PlatformIO, TFLite Micro |
 
-## 📄 Files and Their Purposes
+## Quick Start
 
-### Python ML Pipeline Scripts
-
-| File | Purpose |
-|------|-------|
-| **`generate_tts.py`** | Generates synthetic "Hey Nevo" audio samples using Azure TTS with various voices, rates, and pitches. Creates diverse training data. |
-| **`prepare_dataset.py`** | Prepares the dataset by loading raw audio, applying data augmentation (noise injection), and organizing files into train directories. |
-| **`extract_features.py`** | Extracts Energy and Zero-Crossing Rate (ZCR) features from audio files. Pads/trims audio to uniform duration (1 second / 16000 samples) and computes features over 64 windows. Saves as NumPy arrays. |
-| **`train_model.py`** | Builds and trains a Conv1D model using TensorFlow/Keras. Accepts pre-extracted Energy+ZCR features and train/val splits. Outputs a trained `.h5` model. |
-| **`convert_to_tflite.py`** | Converts the trained Keras model to TensorFlow Lite format with Int8 quantization. Outputs `.tflite` model for embedded deployment. |
-| **`run_pipeline.py`** | Executes the full ML pipeline in order: `generate_tts` → `prepare_dataset` → `extract_features` → `train_model` → `convert_to_tflite`. |
-| **`live_inference.py`** | Real-time wake word detection from microphone input. Processes audio chunks, extracts Energy+ZCR features, and runs inference on the trained model. Prints confidence scores. |
-| **`test_model_live.py`** | Alternative real-time inference script for testing the model with live audio input. |
-| **`neve_brain.py`** | Serial communication handler for ESP32-S3. Receives audio data via UART, buffers audio after wake detection, and forwards to AI processor for processing. |
-| **`main.py`** | Master pipeline script that runs all ML steps in sequence. Call `python main.py` to run the complete pipeline. |
-
-### Firmware Files
-
-| File | Purpose |
-|------|-------|
-| **`Firmware/src/main.cpp`** | Main firmware source for ESP32-S3. Handles I2S audio capture, TF Lite Micro inference, WiFi streaming, and network communication. |
-| **`Firmware/platformio.ini`** | PlatformIO configuration for ESP32-S3 DevKit. Defines board, libraries (EloquentTinyML), and build flags. |
-| **`Firmware/secrets.h`** | Configuration file for WiFi credentials and other secrets. Copy from `secrets_example.h` and edit. |
-
----
-
-## 🎯 How to Train a Wake Word Detection Model
-
-### Prerequisites
-
-```bash
-# Python 3.8+ and dependencies
-pip install -r requirements.txt
-```
-
-### Option 1: Run Full Pipeline (Recommended for Training from Scratch)
+### 1. Install dependencies
 
 ```bash
 cd wake_word
-
-# Run the complete pipeline
-python main.py
-```
-
-The pipeline will:
-1. Generate synthetic wake word audio samples using Azure TTS
-2. Prepare and augment the dataset
-3. Extract Energy and ZCR features from all audio files
-4. Train a CNN model on the extracted features
-5. Convert the model to TensorFlow Lite with Int8 quantization
-6. Generate quantized TFLite model for ESP32 deployment
-
-### Option 2: Step-by-Step (Manual Control)
-
-```bash
-# Step 1: Generate synthetic audio samples
-python generate_tts.py
-
-# Step 2: Prepare and augment the dataset
-python prepare_dataset.py
-
-# Step 3: Extract Energy and ZCR features
-python extract_features.py
-
-# Step 4: Train the model
-python train_model.py
-
-# Step 5: Convert to TFLite for embedded deployment
-python convert_to_tflite.py
-```
-
----
-
-## 🎯 How to Deploy on ESP32-S3
-
-### 1. Build Firmware
-
-```bash
-cd Firmware
-
-# Build using PlatformIO CLI
-pio run
-
-# Or build and upload directly
-pio run -t upload
-```
-
-### 2. Upload to Device
-
-```bash
-# Upload to ESP32-S3 DevKit
-pio run -t upload
-
-# Specify custom port if needed
-pio run -t upload -p /dev/ttyUSB0
-```
-
-### 3. Configuration
-
-Before uploading, copy and edit the secrets file:
-
-```bash
-cd Firmware
-cp secrets_example.h secrets.h
-# Edit secrets.h with your WiFi credentials
-```
-
-### 4. Monitor Serial Output
-
-```bash
-# Open serial monitor (115200 baud)
-pio device monitor
-
-# Or use PlatformIO CLI
-pio device monitor
-```
-
-Expected startup output:
-```
-🤖 Nevo Autonomous Ear Booting...
-✅ AI Model Loaded into S3 Core.
-🎧 Mode: LOCAL LISTENING (Silent Network)
-```
-
----
-
-## 🧠 Model Architecture
-
-The model is a lightweight Conv1D designed for Energy + Zero-Crossing Rate (ZCR) feature inputs.
-
-```
-Input: (64, 2, 1)  # Windows, Features (Energy+ZCR), Channels
-
-Conv1D(32) → Conv1D(32) → MaxPool →  
-Conv1D(64) → Conv1D(64) → MaxPool →  
-Conv1D(128) → Conv1D(128) → MaxPool →  
-Flatten → Dense(64) → ReLU → Dense(1) [sigmoid]
-
-Total inputs: 64 windows × 2 features (Energy, ZCR) = 128 features
-
-Output: Probability of wake word (0.0 to 1.0)
-```
-
----
-
-## 🚀 Usage Examples
-
-### Real-time Detection (with Microphone)
-
-```bash
-python live_inference.py
-```
-
-The program will:
-- Listen via microphone at 16kHz sample rate
-- Process 1-second audio chunks (16000 samples)
-- Display confidence scores in real-time
-- Detect wake word when confidence > 0.8
-- Apply 2-second cooldown after detection
-
-### Serial Handler (for ESP32-S3)
-
-```bash
-python neve_brain.py
-```
-
-This script handles serial communication to receive audio data from the ESP32's ADC and forwards to the AI processor for processing.
-
-### Test Firmware Directly
-
-```bash
-# Open PlatformIO Serial Monitor
-cd Firmware
-pio device monitor
-```
-
-The ESP32 will listen locally and print:
-```
-[Mic Vol: XXXX] | Background: 0.00 | WakeWord: 0.00
-🔥 [🔥] WAKE WORD DETECTED! Confidence: 0.85
-```
-
----
-
-## 📊 Dataset Configuration
-
-The dataset includes:
-- **Positive samples**: Augmented "Hey Nevo" recordings (noise-injected)
-- **Negative samples**: Random audio segments from clean/noise directories
-- **Sample rate**: 16kHz
-- **Duration per sample**: 1 second
-- **Feature extraction**: 64 windows, 2 features per window (Energy, ZCR)
-
----
-
-## 📦 Model Artifacts
-
-After training, the following files are generated in the `models/` directory:
-
-- `wake_word_model.h5` - Trained Keras model (saved before conversion)
-- `wake_word_model.tflite` - Quantized TensorFlow Lite model for embedded deployment
-
-The TFLite model is automatically included in the firmware build via the `EloquentTinyML` library.
-
----
-
-## 🔧 Requirements
-
-### Python Environment
-
-```
-Python >= 3.8
-tensorflow >= 2.10
-numpy >= 1.21
-librosa
-scikit-learn
-soundfile
-edge-tts
-pyaudio
-```
-
-Install with:
-
-```bash
 pip install -r requirements.txt
+# macOS Apple Silicon (optional):
+# pip install -r requirements-macos.txt
 ```
 
-### Firmware Dependencies
+### 2. Train the model (first time)
 
-- PlatformIO with ESP32 package
-- EloquentTinyML (EloquentTinyML@^0.0.3)
+```bash
+python3 main.py --skip-tts        # uses existing positive_raw audio
+python3 main.py                   # full pipeline including TTS
+python3 main.py --skip-tts --skip-bootstrap  # fastest re-run
+```
 
----
+### 3. Start the dashboard
 
-## 🌐 Network Mode
+```bash
+./dev.sh
+# Backend:  http://localhost:8000/api/health
+# Frontend: http://localhost:5173
+```
 
-When the wake word is detected (confidence > 0.8):
-1. ESP32 connects to WiFi
-2. Sends buffered 1-second audio chunk via UDP
-3. Listens for commands from AI processor
-4. After 5 seconds, returns to local listening mode
+Or manually:
 
----
+```bash
+# Terminal 1
+PYTHONPATH=.:. uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
-## 📝 License
+# Terminal 2
+cd frontend && npm install && npm run dev
+```
 
-MIT License
+### 4. Live CLI test (no browser)
 
----
+```bash
+python3 test_model_live.py
+```
 
-## 💡 Tips
+## Demo Modes
 
-1. **First run**: Always run the full pipeline to train the model from scratch
-2. **Audio quality**: Ensure microphone is connected and working before running `live_inference.py`
-3. **Threshold tuning**: Modify detection threshold in firmware (`#define` near line 175 in `main.cpp`) to adjust sensitivity
-4. **Model size**: The quantized model is ~250KB, suitable for embedded deployment
-5. **WiFi credentials**: Edit `Firmware/secrets.h` before uploading to your device
-6. **PSRAM required**: ESP32-S3 must have PSRAM enabled (automatic in platformio.ini)
-7. **Serial monitor**: Use 115200 baud rate when monitoring firmware output
+### Browser Mode (no hardware)
+1. Open http://localhost:5173
+2. Click **Start Listening** and grant mic permission
+3. Say **"היי נבו"** — confidence bar spikes
+4. Whisper transcript appears in the Transcript panel
 
----
+### ESP32 Mode (hardware hero)
+1. Copy and edit firmware secrets:
+   ```bash
+   cd Firmware && cp secrets_example.h secrets.h
+   ```
+2. Flash firmware:
+   ```bash
+   pio run -t upload
+   ```
+3. Set `IP` in `secrets.h` to your backend host IP
+4. Dashboard Device panel shows UDP packets and transcript on wake
 
-## 🐛 Troubleshooting
+## Project Structure
 
-### Firmware won't upload
-- Check USB connection and board recognition
-- Ensure PlatformIO ESP32 package is installed: `pio update`
+```
+wake_word/
+├── config.py              # Shared constants
+├── features.py            # Canonical Energy+ZCR (matches firmware)
+├── protocol.py            # UDP packet format
+├── inference/engine.py    # Keras + TFLite inference
+├── backend/               # FastAPI app
+├── frontend/              # React dashboard
+├── scripts/bootstrap_dataset.py
+├── dataset/               # clean, noise, positive_raw, train/
+├── models/                # .h5, .tflite, model_data.h, metrics.json
+├── Firmware/              # ESP32-S3 PlatformIO project
+├── tests/test_feature_parity.py
+└── main.py                # ML pipeline orchestrator
+```
 
-### Model inference errors
-- Verify `wake_word_model.tflite` is in the models/ directory
-- Check that `models/` folder exists in project root
-- Ensure model was converted with `convert_to_tflite.py`
+## Model Architecture
 
-### No audio input
-- Check I2S pin configuration in `Firmware/src/main.cpp`
-- Verify microphone/jack connection
+```
+Input: (64, 2)   # 64 windows × Energy + ZCR
 
-### WiFi connection fails
-- Verify credentials in `secrets.h`
-- Check router SSID/password
-- Ensure WiFi signal is strong enough
+Conv1D(8)  → MaxPool
+Conv1D(16) → MaxPool
+Conv1D(24) → AvgPool(16) → Flatten
+Dense(16) → Dropout(0.2) → Dense(2, softmax)
+
+Output: [background, wake_word]
+```
+
+INT8 TFLite model is ~12 KB. Firmware TFLite arena: 40 KB.
+
+## API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health` | Model + device status |
+| `GET /api/model/metrics` | Training accuracy, loss history |
+| `POST /api/pipeline/run` | Trigger background retrain |
+| `GET /api/pipeline/status` | Pipeline progress |
+| `WS /ws/inference` | Browser mic → live inference |
+| `WS /ws/events` | Dashboard event stream |
+| `UDP :5555` | ESP32 audio packets |
+
+## Hardware BOM
+
+- ESP32-S3 DevKit (PSRAM required)
+- I2S MEMS microphone
+- Pins: WS=15, SD=3, SCK=17
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEVO_WHISPER_MODEL` | `tiny` | faster-whisper model size |
+| `NEVO_LLM_ENABLED` | `false` | Enable Ollama LLM reply |
+| `NEVO_LLM_URL` | `http://localhost:11434/api/generate` | Ollama endpoint |
+
+## 5-Minute Employee Demo Script
+
+1. Show dashboard architecture banner
+2. Browser: say "היי נבו" → confidence spike → Whisper transcript
+3. Training Lab: show 96%+ val accuracy and INT8 model size
+4. ESP32 on desk: wake → UDP stream → dashboard updates
+5. Mention: runs offline on MCU, Hebrew wake word, full custom pipeline
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| Pipeline fails on empty dataset | Run `python3 scripts/bootstrap_dataset.py` |
+| No mic in browser | Use HTTPS or localhost; check browser permissions |
+| ESP32 no UDP | Verify `secrets.h` IP matches backend host |
+| TFLite conversion fails | Uses SavedModel export (TF 2.16+); check `convert_to_tflite.py` logs |
+| Whisper slow | Uses `tiny` model by default; first run downloads weights |
+
+## License
+
+MIT

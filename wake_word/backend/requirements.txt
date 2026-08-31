@@ -1,0 +1,9 @@
+# Backend-specific (lighter install for inference-only)
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+websockets>=12.0
+python-multipart>=0.0.9
+numpy>=1.24.0,<2.0.0
+tensorflow==2.16.2
+faster-whisper>=1.0.0
+httpx>=0.27.0

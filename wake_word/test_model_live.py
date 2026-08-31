@@ -1,99 +1,55 @@
-import sounddevice as sd
-import numpy as np
-import tensorflow as tf
-import os
+#!/usr/bin/env python3
+"""Live wake word detection using shared inference engine."""
+
 import sys
 import time
+from pathlib import Path
 
-# ====================== Settings ======================
-SAMPLE_RATE = 16000
-DURATION = 3  # seconds
-SIGNAL_LENGTH = SAMPLE_RATE * DURATION
+import numpy as np
+import sounddevice as sd
 
-MODEL_PATH = "models/wake_word_model.h5"
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
 
-if not os.path.exists(MODEL_PATH):
-    print(f"❌ Error: Model file '{MODEL_PATH}' not found!")
-    sys.exit(1)
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-print("📦 Loading model...")
-model = tf.keras.models.load_model(MODEL_PATH)
-print(f"✅ Model loaded successfully! Input shape: {model.input_shape}")
-
-# ====================== Feature Extraction ======================
-WINDOWS = 64
-STEP = SIGNAL_LENGTH // WINDOWS
-
-def extract_features(audio):
-    features = np.zeros((WINDOWS, 2), dtype=np.float32)
-    
-    for i in range(WINDOWS):
-        start = i * STEP
-        window = audio[start : start + STEP]
-        
-        if len(window) > 0:
-            # Energy
-            avg_energy = np.mean(np.abs(window))
-            features[i, 0] = avg_energy / 32768.0
-            
-            # Zero Crossing Rate
-            crossings = np.sum((window[1:] * window[:-1]) < 0)
-            features[i, 1] = crossings / STEP
-    
-    return features.reshape(1, WINDOWS, 2)
+from config import COOLDOWN_SECONDS, SAMPLE_RATE, SIGNAL_LENGTH, WAKE_THRESHOLD
+from inference.engine import InferenceEngine
 
 
-# ====================== Main Continuous Loop ======================
-print("\n🎙️ Starting continuous recording & playback loop...")
-print("Each cycle: Record 3s → Analyze → Play back")
-print("Press Ctrl+C to stop.\n")
+def main() -> None:
+    engine = InferenceEngine()
+    print(f"Model loaded ({engine.backend_name}). Input: 1 second @ {SAMPLE_RATE} Hz")
+    print(f"Say 'היי נבו' — threshold {WAKE_THRESHOLD}. Ctrl+C to stop.\n")
 
-try:
-    while True:
-        # --- Recording ---
-        print(f"🎤 Recording {DURATION} seconds... Speak now!")
-        audio_recording = sd.rec(int(SAMPLE_RATE * DURATION), 
-                               samplerate=SAMPLE_RATE, 
-                               channels=1, 
-                               dtype=np.int16)
-        sd.wait()
+    last_wake = 0.0
 
-        audio = audio_recording.flatten()
+    try:
+        while True:
+            recording = sd.rec(
+                SIGNAL_LENGTH, samplerate=SAMPLE_RATE, channels=1, dtype=np.int16
+            )
+            sd.wait()
+            audio = recording.flatten()
 
-        # --- Analysis ---
-        print("🔍 Analyzing with model...")
-        features = extract_features(audio)
-        prediction = model.predict(features, verbose=0)[0]
+            result = engine.predict_int16(audio)
+            now = time.time()
 
-        background_score = prediction[0]
-        wake_word_score = prediction[1]
+            print(
+                f"Background: {result.background:.3f} | "
+                f"Wake: {result.wake_word:.3f}",
+                end="",
+            )
 
-        print("="*65)
-        print(f"📊 RESULTS (Last {DURATION} seconds)")
-        print(f"   Background Score : {background_score:.4f}")
-        print(f"   Wake Word Score  : {wake_word_score:.4f}")
-        print("="*65)
+            if result.is_wake and (now - last_wake) > COOLDOWN_SECONDS:
+                print(" -> WAKE DETECTED!")
+                last_wake = now
+            else:
+                print()
 
-        if wake_word_score > 0.80:
-            print("🔥🔥 WAKE WORD DETECTED! 🔥🔥")
-        elif wake_word_score > 0.60:
-            print("⚠️  Possible wake word detected")
-        else:
-            print("❌ No wake word detected")
+            time.sleep(0.1)
 
-        # --- Playback ---
-        print(f"▶️ Playing back the recording...")
-        sd.play(audio, SAMPLE_RATE)
-        sd.wait()
+    except KeyboardInterrupt:
+        print("\nStopped.")
 
-        print("-" * 65)
-        print("Starting next cycle...\n")
-        # Small pause between cycles (optional)
-        time.sleep(0.3)
 
-except KeyboardInterrupt:
-    print("\n\n⏹️ Program stopped by user.")
-except Exception as e:
-    print(f"\n❌ Error occurred: {e}")
+if __name__ == "__main__":
+    main()
