@@ -6,17 +6,31 @@ Prepares and augments audio dataset for Wake Word Spotting model training.
 
 import os
 import random
+import sys
+from pathlib import Path
+
+import librosa
 import numpy as np
 import soundfile as sf
-import librosa
 
-# Configuration
-SOURCE_DIR = "dataset/positive_raw"
-NOISE_DIR = "dataset/noise"
-CLEAN_DIR = "dataset/clean"
-OUTPUT_POSITIVE = "dataset/train/positive"
-OUTPUT_NEGATIVE = "dataset/train/negative"
-TARGET_SAMPLE_RATE = 16000
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+
+from config import (
+    CLEAN_DIR as CLEAN_PATH,
+    NOISE_DIR as NOISE_PATH,
+    POSITIVE_RAW_DIR,
+    SAMPLE_RATE,
+    TRAIN_NEGATIVE_DIR,
+    TRAIN_POSITIVE_DIR,
+)
+
+SOURCE_DIR = str(POSITIVE_RAW_DIR)
+NOISE_DIR = str(NOISE_PATH)
+CLEAN_DIR = str(CLEAN_PATH)
+OUTPUT_POSITIVE = str(TRAIN_POSITIVE_DIR)
+OUTPUT_NEGATIVE = str(TRAIN_NEGATIVE_DIR)
+TARGET_SAMPLE_RATE = SAMPLE_RATE
 NUM_AUGMENTATIONS_PER_FILE = 30
 NUM_NEGATIVE_SAMPLES = 300
 NOISE_INJECTION_PROBABILITY = 0.8
@@ -146,38 +160,33 @@ def generate_positive_augmentation(original_audio, augmentation_id, noise_files)
 def generate_negative_samples(num_samples):
     """Generate random negative samples from clean and noise directories."""
     negative_samples = []
-    
-    # Get available files
+
     clean_files = [os.path.join(CLEAN_DIR, f) for f in os.listdir(CLEAN_DIR) if f.endswith('.wav')] if os.path.exists(CLEAN_DIR) else []
     noise_files = [os.path.join(NOISE_DIR, f) for f in os.listdir(NOISE_DIR) if f.endswith('.wav')] if os.path.exists(NOISE_DIR) else []
-    
+
     files = clean_files + noise_files
     if not files:
         print("Warning: No files found in clean or noise directories to generate negative samples.")
         return negative_samples
-        
-    random.shuffle(files)
-    
-    for i, filepath in enumerate(files[:num_samples]):
+
+    for i in range(num_samples):
+        filepath = random.choice(files)
         audio, sr = load_and_resample_audio(filepath)
-        
-        # Trim to 1 second if longer
+
+        # Random crop/pad to 1 second for variety when looping same files
         if len(audio) > TARGET_SAMPLE_RATE:
-            audio = audio[:TARGET_SAMPLE_RATE]
-        
-        # Pad if shorter than 1 second
-        if len(audio) < TARGET_SAMPLE_RATE:
+            start = random.randint(0, len(audio) - TARGET_SAMPLE_RATE)
+            audio = audio[start : start + TARGET_SAMPLE_RATE]
+        elif len(audio) < TARGET_SAMPLE_RATE:
             audio = np.pad(audio, (0, TARGET_SAMPLE_RATE - len(audio)), mode='constant')
-        
-        # Save
+
         output_path = os.path.join(OUTPUT_NEGATIVE, f"negative_{i+1:04d}.wav")
         sf.write(output_path, audio, TARGET_SAMPLE_RATE)
-        
         negative_samples.append(output_path)
-        
+
         if (i + 1) % 100 == 0:
             print(f"Generated {i + 1}/{num_samples} negative samples...")
-    
+
     return negative_samples
 
 def main():

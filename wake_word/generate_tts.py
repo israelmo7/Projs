@@ -1,69 +1,57 @@
+#!/usr/bin/env python3
+"""Generate synthetic wake word audio using edge-tts."""
+
 import asyncio
-import edge_tts
-import os
+import sys
+from pathlib import Path
 
-# Target text in Hebrew
-TARGET_TEXT = "היי נבו"
+import librosa
+import soundfile as sf
 
-# Voice options
-VOICES = ["he-IL-AvriNeural", "he-IL-HilaNeural"]
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
 
-# Rate options
-RATES = ["-20%", "+0%", "+20%"]
+from config import POSITIVE_RAW_DIR, TTS_PITCHES, TTS_RATES, TTS_VOICES, WAKE_PHRASE
 
-# Pitch options - MUST include the Hz suffix for Azure SSML validation
-PITCHES = ["-20Hz", "+0Hz", "+20Hz"]
 
-# Output directory
-OUTPUT_DIR = "wake_word/raw_audio"
-
-def get_file_name(voice, rate, pitch):
-    """Generate descriptive filename from parameters."""
-    voice_name = "asaf" if "Asaf" in voice else "hila"
-    # Clean up the strings to make safe file names
+def get_file_name(voice: str, rate: str, pitch: str) -> str:
+    voice_name = "avri" if "Avri" in voice else "hila"
     rate_clean = rate.replace("%", "").replace("+", "plus").replace("-", "minus")
     pitch_clean = pitch.replace("Hz", "").replace("+", "plus").replace("-", "minus")
-    return f"{voice_name}_rate_{rate_clean}_pitch_{pitch_clean}.mp3"
+    return f"{voice_name}_rate_{rate_clean}_pitch_{pitch_clean}.wav"
 
-async def generate_tts(voice, rate, pitch):
-    """Generate audio for a specific combination of voice, rate, and pitch."""
+
+async def generate_tts(voice: str, rate: str, pitch: str) -> Path:
+    import edge_tts
+
     print(f"Generating: voice={voice}, rate={rate}, pitch={pitch}")
-    
-    # Create the TTS configuration - pass rate and pitch correctly
-    communicate = edge_tts.Communicate(
-        TARGET_TEXT, 
-        voice,
-        rate=rate,
-        pitch=pitch
-    )
-    
-    # Generate the audio
-    filename = get_file_name(voice, rate, pitch)
-    filepath = os.path.join(OUTPUT_DIR, filename)
-    
-    # save takes the file path
-    await communicate.save(filepath)
-    
+
+    communicate = edge_tts.Communicate(WAKE_PHRASE, voice, rate=rate, pitch=pitch)
+    tmp_mp3 = POSITIVE_RAW_DIR / "_tmp.mp3"
+    POSITIVE_RAW_DIR.mkdir(parents=True, exist_ok=True)
+    await communicate.save(str(tmp_mp3))
+
+    audio, sr = librosa.load(str(tmp_mp3), sr=16000, mono=True)
+    tmp_mp3.unlink(missing_ok=True)
+
+    filepath = POSITIVE_RAW_DIR / get_file_name(voice, rate, pitch)
+    sf.write(str(filepath), audio, 16000)
     print(f"Saved: {filepath}")
     return filepath
 
-async def main():
-    """Main function to generate all combinations."""
-    # Ensure output directory exists
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    
-    total_files = len(VOICES) * len(RATES) * len(PITCHES)
-    print(f"Target text: {TARGET_TEXT}")
-    print(f"Generating {total_files} audio files...\n")
-    
-    # Iterate through all combinations
-    for voice in VOICES:
-        for rate in RATES:
-            for pitch in PITCHES:
+
+async def main() -> None:
+    total = len(TTS_VOICES) * len(TTS_RATES) * len(TTS_PITCHES)
+    print(f"Target text: {WAKE_PHRASE}")
+    print(f"Generating {total} WAV files to {POSITIVE_RAW_DIR}...\n")
+
+    for voice in TTS_VOICES:
+        for rate in TTS_RATES:
+            for pitch in TTS_PITCHES:
                 await generate_tts(voice, rate, pitch)
-    
+
     print("\nAll audio files generated successfully!")
-    print(f"Files saved to: {OUTPUT_DIR}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

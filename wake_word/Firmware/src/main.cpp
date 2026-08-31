@@ -4,8 +4,7 @@
 #include <driver/i2s.h>
 #include <EloquentTinyML.h>
 
-#include "esp_dsp.h" // ספריית ה-DSP הרשמית של ESP32
-#include "../../models/model_data.h" // המודל שלך בקובץ נפרד
+#include "../../models/model_data.h"
 #include "secrets.h"
 
 // --- הגדרות רשת ---
@@ -170,10 +169,14 @@ void loop() {
                 lastPrintTime = millis();
                 Serial.printf("[Mic Vol: %5d] | Background: %.2f | WakeWord: %.2f\n", 
                               maxSample, outputFeatures[0], outputFeatures[1]);
+                Serial.printf("{\"wake\":%.2f,\"bg\":%.2f,\"state\":\"listening\",\"vol\":%d}\n",
+                              outputFeatures[1], outputFeatures[0], maxSample);
             }
 
             if (outputFeatures[1] > 0.80f) { 
                 Serial.printf("\n🔥 [🔥] WAKE WORD DETECTED! Confidence: %.2f\n", outputFeatures[1]);
+                Serial.printf("{\"wake\":%.2f,\"bg\":%.2f,\"state\":\"streaming\"}\n",
+                              outputFeatures[1], outputFeatures[0]);
                 connectToWiFi(); 
                 
                 udp.beginPacket(hostIP, port);

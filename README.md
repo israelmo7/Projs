@@ -22,7 +22,7 @@ A soundboard system with visual trigger images (1-7) used to activate specific s
 ### 2. wake_word
 **Location:** `/wake_word/`
 
-Speech recognition project focused on training models for wake word detection. Includes datasets for training, feature extraction, TTS generation, model conversion to TensorFlow Lite, and live inference capabilities.
+Speech recognition project focused on training models for wake word detection. Includes datasets for training, feature extraction, TTS generation, model conversion to TensorFlow Lite, live inference, **FastAPI backend**, and **React dashboard** for portfolio demos.
 
 ---
 

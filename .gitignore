@@ -16,6 +16,14 @@ venv/
 !*.py
 !*.ino
 
+# Frontend / web assets
+!*.ts
+!*.tsx
+!*.html
+!*.css
+!*.sh
+!*.js
+
 # 4. חובה לפרויקט: קבצי קונפיגורציה, הגדרות ותיעוד
 !platformio.ini
 !*.txt
